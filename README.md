@@ -72,6 +72,7 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make publish-local
 - Restarts detected Node dev servers with the right package manager when a `dev` or `start` script exists.
 - Shows a `Port Conflicts` warning group when multiple visible listeners share the same port.
 - Groups stale agent worktree dev servers separately when project files disappear, with a single cleanup action.
+- Adds ignore rules through Settings and quick Ignore actions for noisy ports, apps, projects, or containers.
 - Keeps Docker Desktop forwarded ports under one `Docker Containers` submenu, identified by container, compose project/service, image, and working directory.
 - Uses `Stop Container` for Docker ports instead of killing Docker Desktop itself.
 - Collapses multi-port dev servers to their primary app port and moves helper/debug ports under `Other Listening Ports`.

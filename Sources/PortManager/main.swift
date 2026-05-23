@@ -92,6 +92,19 @@ struct ListeningProcess: Hashable, Sendable {
         return "Unpin Port"
     }
 
+    var ignoreTargetKey: String? {
+        if let container {
+            return (container.composeProject.map { "\($0)/\(container.composeService ?? container.name)" } ?? container.name)
+                .lowercased()
+        }
+
+        if let project {
+            return (project.root ?? project.cwd ?? project.name).lowercased()
+        }
+
+        return nil
+    }
+
     var prettyCommand: String {
         let lower = command.lowercased()
 
@@ -1057,6 +1070,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isRefreshing = false
     private var lastRefresh: Date?
     private var networkAddress: String?
+    private var settingsWindow: NSWindow?
+    private var ignoredPortsTextView: NSTextView?
+    private var ignoredCommandsTextView: NSTextView?
+    private var ignoredTargetsTextView: NSTextView?
 
     private var showAllProcesses: Bool {
         get {
@@ -1078,12 +1095,44 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private var visibleProcesses: [ListeningProcess] {
-        if showAllProcesses {
-            return currentProcesses
+    private var ignoredPorts: Set<Int> {
+        get {
+            Set(UserDefaults.standard.stringArray(forKey: "ignoredPorts")?.compactMap(Int.init) ?? [])
         }
 
-        return currentProcesses.filter { !$0.hiddenByDefault }
+        set {
+            UserDefaults.standard.set(newValue.map(String.init).sorted(), forKey: "ignoredPorts")
+        }
+    }
+
+    private var ignoredCommands: Set<String> {
+        get {
+            Set(UserDefaults.standard.stringArray(forKey: "ignoredCommands") ?? [])
+        }
+
+        set {
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: "ignoredCommands")
+        }
+    }
+
+    private var ignoredTargets: Set<String> {
+        get {
+            Set(UserDefaults.standard.stringArray(forKey: "ignoredTargets") ?? [])
+        }
+
+        set {
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: "ignoredTargets")
+        }
+    }
+
+    private var visibleProcesses: [ListeningProcess] {
+        let processes = currentProcesses.filter { !isIgnored($0) }
+
+        if showAllProcesses {
+            return processes
+        }
+
+        return processes.filter { !$0.hiddenByDefault }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1166,6 +1215,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         preferences.isEnabled = false
         menu.addItem(preferences)
 
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         let loginItem = NSMenuItem(
             title: "Open at Login",
             action: #selector(toggleOpenAtLogin(_:)),
@@ -1246,6 +1299,24 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         item.submenu = submenu
         return item
+    }
+
+    private func isIgnored(_ process: ListeningProcess) -> Bool {
+        if ignoredPorts.contains(process.port) {
+            return true
+        }
+
+        let command = process.command.lowercased()
+        let prettyCommand = process.prettyCommand.lowercased()
+        if ignoredCommands.contains(where: { command.contains($0) || prettyCommand.contains($0) }) {
+            return true
+        }
+
+        guard let target = process.ignoreTargetKey else {
+            return false
+        }
+
+        return ignoredTargets.contains { target.contains($0) }
     }
 
     private func addProcessItems(_ processes: [ListeningProcess], to menu: NSMenu) {
@@ -1435,6 +1506,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
         }
 
+        if let target = group.project.map({ ($0.root ?? $0.cwd ?? $0.name).lowercased() }) {
+            addIgnoreItem(to: submenu, title: "Ignore Project", kind: "target", value: target)
+        }
+
         submenu.addItem(.separator())
 
         let killAllItem = NSMenuItem(title: group.killTitle, action: #selector(killProcessGroup(_:)), keyEquivalent: "")
@@ -1539,6 +1614,13 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let pinKey = group.pinKey {
             addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
         }
+
+        addIgnoreItem(
+            to: submenu,
+            title: "Ignore Container",
+            kind: "target",
+            value: container.displayName.lowercased()
+        )
 
         submenu.addItem(.separator())
 
@@ -1713,6 +1795,23 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pinTitle: process.pinTitle,
             unpinTitle: process.unpinTitle
         )
+        addIgnoreItem(to: submenu, title: "Ignore Port", kind: "port", value: "\(process.port)")
+
+        if let target = process.ignoreTargetKey {
+            addIgnoreItem(
+                to: submenu,
+                title: process.container == nil ? "Ignore Project" : "Ignore Container",
+                kind: "target",
+                value: target
+            )
+        } else {
+            addIgnoreItem(
+                to: submenu,
+                title: "Ignore App",
+                kind: "command",
+                value: process.command.lowercased()
+            )
+        }
 
         if let container = process.container {
             submenu.addItem(.separator())
@@ -1841,6 +1940,13 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item)
     }
 
+    private func addIgnoreItem(to menu: NSMenu, title: String, kind: String, value: String) {
+        let item = NSMenuItem(title: title, action: #selector(ignoreItem(_:)), keyEquivalent: "")
+        item.representedObject = "\(kind):\(value)"
+        item.target = self
+        menu.addItem(item)
+    }
+
     @objc private func pinItem(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         var keys = pinnedKeys
@@ -1902,6 +2008,39 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var keys = pinnedKeys
         keys.remove(key)
         pinnedKeys = keys
+        rebuildMenu()
+    }
+
+    @objc private func ignoreItem(_ sender: NSMenuItem) {
+        guard
+            let payload = sender.representedObject as? String,
+            let separator = payload.firstIndex(of: ":")
+        else {
+            return
+        }
+
+        let kind = String(payload[..<separator])
+        let value = String(payload[payload.index(after: separator)...])
+
+        switch kind {
+        case "port":
+            if let port = Int(value) {
+                var ports = ignoredPorts
+                ports.insert(port)
+                ignoredPorts = ports
+            }
+        case "command":
+            var commands = ignoredCommands
+            commands.insert(value)
+            ignoredCommands = commands
+        case "target":
+            var targets = ignoredTargets
+            targets.insert(value)
+            ignoredTargets = targets
+        default:
+            break
+        }
+
         rebuildMenu()
     }
 
@@ -2073,6 +2212,111 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func refreshNow() {
         requestRefresh(force: true)
+    }
+
+    @objc private func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = makeSettingsWindow()
+        }
+
+        ignoredPortsTextView?.string = ignoredPorts.map(String.init).sorted().joined(separator: "\n")
+        ignoredCommandsTextView?.string = ignoredCommands.sorted().joined(separator: "\n")
+        ignoredTargetsTextView?.string = ignoredTargets.sorted().joined(separator: "\n")
+
+        settingsWindow?.center()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 430),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Port Manager Settings"
+        window.isReleasedWhenClosed = false
+
+        let contentView = NSView(frame: window.contentView?.bounds ?? .zero)
+        contentView.autoresizingMask = [.width, .height]
+        window.contentView = contentView
+
+        let title = NSTextField(labelWithString: "Ignore Rules")
+        title.font = .boldSystemFont(ofSize: 16)
+        title.frame = NSRect(x: 24, y: 382, width: 240, height: 24)
+        contentView.addSubview(title)
+
+        let detail = NSTextField(labelWithString: "One value per line. Matching ports, app commands, projects, and Docker containers are hidden from the menu.")
+        detail.textColor = .secondaryLabelColor
+        detail.frame = NSRect(x: 24, y: 350, width: 510, height: 34)
+        detail.cell?.wraps = true
+        contentView.addSubview(detail)
+
+        let ports = makeSettingsTextView(label: "Ports", frame: NSRect(x: 24, y: 118, width: 120, height: 200), in: contentView)
+        let commands = makeSettingsTextView(label: "Apps / commands", frame: NSRect(x: 160, y: 118, width: 170, height: 200), in: contentView)
+        let targets = makeSettingsTextView(label: "Projects / containers", frame: NSRect(x: 346, y: 118, width: 188, height: 200), in: contentView)
+
+        ignoredPortsTextView = ports
+        ignoredCommandsTextView = commands
+        ignoredTargetsTextView = targets
+
+        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveSettings))
+        saveButton.bezelStyle = .rounded
+        saveButton.keyEquivalent = "\r"
+        saveButton.frame = NSRect(x: 454, y: 24, width: 80, height: 32)
+        contentView.addSubview(saveButton)
+
+        let resetButton = NSButton(title: "Clear All", target: self, action: #selector(clearSettings))
+        resetButton.bezelStyle = .rounded
+        resetButton.frame = NSRect(x: 360, y: 24, width: 82, height: 32)
+        contentView.addSubview(resetButton)
+
+        return window
+    }
+
+    private func makeSettingsTextView(label: String, frame: NSRect, in contentView: NSView) -> NSTextView {
+        let labelField = NSTextField(labelWithString: label)
+        labelField.frame = NSRect(x: frame.minX, y: frame.maxY + 8, width: frame.width, height: 18)
+        contentView.addSubview(labelField)
+
+        let scrollView = NSScrollView(frame: frame)
+        scrollView.borderType = .bezelBorder
+        scrollView.hasVerticalScroller = true
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.isRichText = false
+        textView.autoresizingMask = [.width]
+        scrollView.documentView = textView
+
+        contentView.addSubview(scrollView)
+        return textView
+    }
+
+    @objc private func saveSettings() {
+        ignoredPorts = Set(parseSettingsList(ignoredPortsTextView?.string ?? "").compactMap(Int.init))
+        ignoredCommands = Set(parseSettingsList(ignoredCommandsTextView?.string ?? "").map { $0.lowercased() })
+        ignoredTargets = Set(parseSettingsList(ignoredTargetsTextView?.string ?? "").map { $0.lowercased() })
+        settingsWindow?.close()
+        rebuildMenu()
+    }
+
+    @objc private func clearSettings() {
+        ignoredPorts = []
+        ignoredCommands = []
+        ignoredTargets = []
+        ignoredPortsTextView?.string = ""
+        ignoredCommandsTextView?.string = ""
+        ignoredTargetsTextView?.string = ""
+        rebuildMenu()
+    }
+
+    private func parseSettingsList(_ string: String) -> [String] {
+        string
+            .components(separatedBy: CharacterSet(charactersIn: "\n,"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     @objc private func toggleOpenAtLogin(_ sender: NSMenuItem) {
