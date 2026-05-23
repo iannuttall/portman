@@ -68,6 +68,8 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make publish-local
 - Lists ports as `3000 · Astro · my-project` when it can identify the project.
 - Infers common dev stacks from project files, including Astro, Next.js, TanStack Start, Vite, React, SvelteKit, Nuxt, Rails, Django, and FastAPI.
 - Shows the project path in each port submenu, with actions to copy it or reveal it in Finder.
+- Opens detected project folders in Ghostty or VS Code.
+- Restarts detected Node dev servers with the right package manager when a `dev` or `start` script exists.
 - Keeps Docker Desktop forwarded ports under one `Docker Containers` submenu, identified by container, compose project/service, image, and working directory.
 - Uses `Stop Container` for Docker ports instead of killing Docker Desktop itself.
 - Collapses multi-port dev servers to their primary app port and moves helper/debug ports under `Other Listening Ports`.

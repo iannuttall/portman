@@ -305,6 +305,16 @@ struct ProcessGroup {
     }
 }
 
+final class RestartTarget: NSObject {
+    let path: String
+    let pids: [Int32]
+
+    init(path: String, pids: [Int32]) {
+        self.path = path
+        self.pids = pids
+    }
+}
+
 final class PortScanner {
     func listeningProcesses() -> [ListeningProcess] {
         let process = Process()
@@ -1356,6 +1366,12 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             revealProjectItem.representedObject = group
             revealProjectItem.target = self
             submenu.addItem(revealProjectItem)
+
+            addProjectLaunchItems(
+                to: submenu,
+                path: project.root ?? project.cwd ?? displayPath,
+                restartTarget: RestartTarget(path: project.root ?? project.cwd ?? displayPath, pids: group.pids)
+            )
         }
 
         let helperProcesses = group.sortedProcesses.filter { $0 != primaryProcess }
@@ -1446,6 +1462,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let pathItem = NSMenuItem(title: displayPath, action: nil, keyEquivalent: "")
             pathItem.isEnabled = false
             submenu.addItem(pathItem)
+
+            if let path = container.workingDirectory {
+                addProjectLaunchItems(to: submenu, path: path, restartTarget: nil)
+            }
         }
 
         submenu.addItem(.separator())
@@ -1541,6 +1561,12 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             revealProjectItem.representedObject = group
             revealProjectItem.target = self
             submenu.addItem(revealProjectItem)
+
+            addProjectLaunchItems(
+                to: submenu,
+                path: project.root ?? project.cwd ?? displayPath,
+                restartTarget: RestartTarget(path: project.root ?? project.cwd ?? displayPath, pids: group.pids)
+            )
         }
 
         submenu.addItem(.separator())
@@ -1616,6 +1642,8 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 revealPathItem.representedObject = process
                 revealPathItem.target = self
                 submenu.addItem(revealPathItem)
+
+                addProjectLaunchItems(to: submenu, path: container.workingDirectory, restartTarget: nil)
             }
 
             let copyNameItem = NSMenuItem(title: "Copy Container Name", action: #selector(copyContainerName(_:)), keyEquivalent: "")
@@ -1652,6 +1680,12 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             revealProjectItem.representedObject = process
             revealProjectItem.target = self
             submenu.addItem(revealProjectItem)
+
+            addProjectLaunchItems(
+                to: submenu,
+                path: project.root ?? project.cwd ?? displayPath,
+                restartTarget: RestartTarget(path: project.root ?? project.cwd ?? displayPath, pids: process.pids)
+            )
         }
 
         submenu.addItem(.separator())
@@ -1665,6 +1699,27 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.toolTip = process.project?.displayPath
         item.submenu = submenu
         return item
+    }
+
+    private func addProjectLaunchItems(to menu: NSMenu, path: String?, restartTarget: RestartTarget?) {
+        guard let path, !path.isEmpty else { return }
+
+        let ghosttyItem = NSMenuItem(title: "Open in Ghostty", action: #selector(openInGhostty(_:)), keyEquivalent: "")
+        ghosttyItem.representedObject = path
+        ghosttyItem.target = self
+        menu.addItem(ghosttyItem)
+
+        let codeItem = NSMenuItem(title: "Open in VS Code", action: #selector(openInVSCode(_:)), keyEquivalent: "")
+        codeItem.representedObject = path
+        codeItem.target = self
+        menu.addItem(codeItem)
+
+        if let restartTarget, devCommand(for: path) != nil {
+            let restartItem = NSMenuItem(title: "Restart Dev Server", action: #selector(restartDevServer(_:)), keyEquivalent: "")
+            restartItem.representedObject = restartTarget
+            restartItem.target = self
+            menu.addItem(restartItem)
+        }
     }
 
     private func addPinItem(to menu: NSMenu, key: String, pinTitle: String, unpinTitle: String) {
@@ -1685,6 +1740,54 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         keys.insert(key)
         pinnedKeys = keys
         rebuildMenu()
+    }
+
+    @objc private func openInGhostty(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+        launchProcess(
+            executable: "/usr/bin/open",
+            arguments: ["-na", "Ghostty", "--args", "--working-directory=\(path)"]
+        )
+    }
+
+    @objc private func openInVSCode(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+
+        if FileManager.default.isExecutableFile(atPath: "/usr/local/bin/code") {
+            launchProcess(executable: "/usr/local/bin/code", arguments: [path])
+        } else {
+            launchProcess(executable: "/usr/bin/open", arguments: ["-a", "Visual Studio Code", path])
+        }
+    }
+
+    @objc private func restartDevServer(_ sender: NSMenuItem) {
+        guard
+            let target = sender.representedObject as? RestartTarget,
+            let command = devCommand(for: target.path)
+        else {
+            return
+        }
+
+        for pid in target.pids {
+            Darwin.kill(pid, SIGTERM)
+        }
+
+        let shellCommand = "cd \(shellQuoted(target.path)) && \(command); exec /bin/zsh"
+        launchProcess(
+            executable: "/usr/bin/open",
+            arguments: [
+                "-na",
+                "Ghostty",
+                "--args",
+                "--working-directory=\(target.path)",
+                "-e",
+                "/bin/zsh",
+                "-lc",
+                shellCommand
+            ]
+        )
+
+        requestRefresh(force: true)
     }
 
     @objc private func unpinItem(_ sender: NSMenuItem) {
@@ -1906,6 +2009,67 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func copyToPasteboard(_ string: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
+    }
+
+    private func devCommand(for path: String) -> String? {
+        let packageURL = URL(fileURLWithPath: path).appendingPathComponent("package.json")
+        guard
+            let data = try? Data(contentsOf: packageURL),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let scripts = json["scripts"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        let packageManager = packageManagerCommand(for: path)
+
+        if scripts["dev"] is String {
+            return packageManager == "npm" ? "npm run dev" : "\(packageManager) dev"
+        }
+
+        if scripts["start"] is String {
+            return packageManager == "npm" ? "npm start" : "\(packageManager) start"
+        }
+
+        return nil
+    }
+
+    private func packageManagerCommand(for path: String) -> String {
+        let url = URL(fileURLWithPath: path)
+        let fileManager = FileManager.default
+
+        if fileManager.fileExists(atPath: url.appendingPathComponent("pnpm-lock.yaml").path) {
+            return "pnpm"
+        }
+
+        if fileManager.fileExists(atPath: url.appendingPathComponent("bun.lock").path)
+            || fileManager.fileExists(atPath: url.appendingPathComponent("bun.lockb").path) {
+            return "bun"
+        }
+
+        if fileManager.fileExists(atPath: url.appendingPathComponent("yarn.lock").path) {
+            return "yarn"
+        }
+
+        return "npm"
+    }
+
+    private func launchProcess(executable: String, arguments: [String]) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return
+        }
+    }
+
+    private func shellQuoted(_ string: String) -> String {
+        "'\(string.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     nonisolated private static func localIPAddressValue() -> String? {
