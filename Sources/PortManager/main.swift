@@ -1120,6 +1120,7 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
+            addConflictItems(for: processes, to: menu)
             addProcessItems(processes, to: menu)
         }
 
@@ -1164,6 +1165,51 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let button = statusItem.button {
             button.title = "\(processes.count)"
         }
+    }
+
+    private func addConflictItems(for processes: [ListeningProcess], to menu: NSMenu) {
+        let conflicts = Dictionary(grouping: processes) { $0.port }
+            .filter { _, processes in processes.count > 1 }
+            .map { port, processes in ProcessGroup(name: "\(port)", processes: processes) }
+            .sorted { Int($0.name) ?? 0 < Int($1.name) ?? 0 }
+
+        guard !conflicts.isEmpty else { return }
+
+        let item = NSMenuItem(
+            title: "Port Conflicts · \(conflicts.count)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let submenu = NSMenu()
+
+        for conflict in conflicts {
+            submenu.addItem(conflictMenuItem(for: conflict))
+        }
+
+        item.submenu = submenu
+        menu.addItem(item)
+        menu.addItem(.separator())
+    }
+
+    private func conflictMenuItem(for group: ProcessGroup) -> NSMenuItem {
+        let port = group.name
+        let item = NSMenuItem(
+            title: "\(port) · \(group.processes.count) listeners",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let submenu = NSMenu()
+
+        let heading = NSMenuItem(title: "Conflicting Listeners", action: nil, keyEquivalent: "")
+        heading.isEnabled = false
+        submenu.addItem(heading)
+
+        for process in group.sortedProcesses {
+            submenu.addItem(menuItem(for: process))
+        }
+
+        item.submenu = submenu
+        return item
     }
 
     private func addProcessItems(_ processes: [ListeningProcess], to menu: NSMenu) {
