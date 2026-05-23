@@ -64,6 +64,7 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make publish-local
 ## What it does
 
 - Shows the count of visible listening ports in the menu bar.
+- Lets you pin useful projects, containers, or individual ports to the top.
 - Lists ports as `3000 · Astro · my-project` when it can identify the project.
 - Infers common dev stacks from project files, including Astro, Next.js, TanStack Start, Vite, React, SvelteKit, Nuxt, Rails, Django, and FastAPI.
 - Shows the project path in each port submenu, with actions to copy it or reveal it in Finder.

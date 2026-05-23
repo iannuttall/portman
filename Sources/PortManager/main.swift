@@ -48,6 +48,42 @@ struct ListeningProcess: Hashable, Sendable {
         return prettyCommand
     }
 
+    var pinKey: String {
+        if let container {
+            return "docker:\(container.composeProject ?? ""):\(container.composeService ?? ""):\(container.name)"
+        }
+
+        if let project {
+            return "project:\(project.root ?? project.cwd ?? project.name)"
+        }
+
+        return "process:\(command):\(port)"
+    }
+
+    var pinTitle: String {
+        if container != nil {
+            return "Pin Container"
+        }
+
+        if project != nil {
+            return "Pin Project"
+        }
+
+        return "Pin Port"
+    }
+
+    var unpinTitle: String {
+        if container != nil {
+            return "Unpin Container"
+        }
+
+        if project != nil {
+            return "Unpin Project"
+        }
+
+        return "Unpin Port"
+    }
+
     var prettyCommand: String {
         let lower = command.lowercased()
 
@@ -228,6 +264,35 @@ struct ProcessGroup {
 
     var primaryProcess: ListeningProcess? {
         sortedProcesses.first { !$0.isLikelyHelperPort } ?? sortedProcesses.first
+    }
+
+    var pinKey: String? {
+        let keys = Set(processes.map(\.pinKey))
+        return keys.count == 1 ? keys.first : nil
+    }
+
+    var pinTitle: String {
+        if allDocker {
+            return "Pin Container"
+        }
+
+        if project != nil {
+            return "Pin Project"
+        }
+
+        return "Pin Group"
+    }
+
+    var unpinTitle: String {
+        if allDocker {
+            return "Unpin Container"
+        }
+
+        if project != nil {
+            return "Unpin Project"
+        }
+
+        return "Unpin Group"
     }
 
     var killTitle: String {
@@ -957,6 +1022,16 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private var pinnedKeys: Set<String> {
+        get {
+            Set(UserDefaults.standard.stringArray(forKey: "pinnedKeys") ?? [])
+        }
+
+        set {
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: "pinnedKeys")
+        }
+    }
+
     private var visibleProcesses: [ListeningProcess] {
         if showAllProcesses {
             return currentProcesses
@@ -1082,21 +1157,40 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func addProcessItems(_ processes: [ListeningProcess], to menu: NSMenu) {
-        let dockerProcesses = processes.filter { $0.container != nil }
-        let nonDockerProcesses = processes.filter { $0.container == nil }
+        let pinned = pinnedKeys
+        let pinnedProcesses = processes.filter { pinned.contains($0.pinKey) }
+        let unpinnedProcesses = processes.filter { !pinned.contains($0.pinKey) }
+        var addedPinnedSection = false
+
+        if !pinnedProcesses.isEmpty {
+            let pinnedHeading = NSMenuItem(title: "Pinned", action: nil, keyEquivalent: "")
+            pinnedHeading.isEnabled = false
+            menu.addItem(pinnedHeading)
+            addPinnedItems(pinnedProcesses, to: menu)
+            addedPinnedSection = true
+        }
+
+        let dockerProcesses = unpinnedProcesses.filter { $0.container != nil }
+        let nonDockerProcesses = unpinnedProcesses.filter { $0.container == nil }
         let orphanProcesses = nonDockerProcesses.filter { $0.project?.isOrphan == true }
         let regularProcesses = nonDockerProcesses.filter { $0.project?.isOrphan != true }
         var addedSpecialGroup = false
 
         if !dockerProcesses.isEmpty {
+            if addedPinnedSection {
+                menu.addItem(.separator())
+                addedPinnedSection = false
+            }
+
             let group = ProcessGroup(name: "Docker Containers", processes: dockerProcesses)
             menu.addItem(dockerRootMenuItem(for: group))
             addedSpecialGroup = true
         }
 
         if !orphanProcesses.isEmpty {
-            if addedSpecialGroup {
+            if addedPinnedSection || addedSpecialGroup {
                 menu.addItem(.separator())
+                addedPinnedSection = false
             }
 
             let group = ProcessGroup(name: "Orphan Processes", processes: orphanProcesses)
@@ -1105,6 +1199,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if addedSpecialGroup && !regularProcesses.isEmpty {
+            menu.addItem(.separator())
+        }
+
+        if addedPinnedSection && !regularProcesses.isEmpty {
             menu.addItem(.separator())
         }
 
@@ -1134,6 +1232,35 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             groupNames: groupNames,
             to: menu
         )
+    }
+
+    private func addPinnedItems(_ processes: [ListeningProcess], to menu: NSMenu) {
+        let grouped = Dictionary(grouping: processes) { $0.pinKey }
+        let groups = grouped.values
+            .map { ProcessGroup(name: $0.first?.groupName ?? "Pinned", processes: $0) }
+            .sorted {
+                let left = $0.primaryProcess?.displayName ?? $0.name
+                let right = $1.primaryProcess?.displayName ?? $1.name
+                return left < right
+            }
+
+        for group in groups {
+            if group.allDocker, let container = group.dockerContainers.first {
+                if group.processes.count == 1, let process = group.processes.first {
+                    menu.addItem(menuItem(for: process))
+                } else {
+                    menu.addItem(dockerContainerMenuItem(for: group, container: container))
+                }
+
+                continue
+            }
+
+            if group.processes.count > 1 || group.project != nil {
+                menu.addItem(projectGroupMenuItem(for: group))
+            } else if let process = group.processes.first {
+                menu.addItem(menuItem(for: process))
+            }
+        }
     }
 
     private func addRegularProcessItems(
@@ -1197,6 +1324,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         copyNetworkItem.target = self
         copyNetworkItem.isEnabled = networkAddress != nil
         submenu.addItem(copyNetworkItem)
+
+        if let pinKey = group.pinKey {
+            addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
+        }
 
         submenu.addItem(.separator())
 
@@ -1293,6 +1424,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopItem.target = self
         submenu.addItem(stopItem)
 
+        if let pinKey = group.pinKey {
+            addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
+        }
+
         submenu.addItem(.separator())
 
         let dockerItem = NSMenuItem(title: "Docker", action: nil, keyEquivalent: "")
@@ -1350,6 +1485,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         killAllItem.representedObject = group
         killAllItem.target = self
         submenu.addItem(killAllItem)
+
+        if let pinKey = group.pinKey {
+            addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
+        }
 
         if group.allOrphans {
             submenu.addItem(.separator())
@@ -1435,6 +1574,13 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         copyNetworkItem.isEnabled = networkAddress != nil
         submenu.addItem(copyNetworkItem)
 
+        addPinItem(
+            to: submenu,
+            key: process.pinKey,
+            pinTitle: process.pinTitle,
+            unpinTitle: process.unpinTitle
+        )
+
         if let container = process.container {
             submenu.addItem(.separator())
 
@@ -1519,6 +1665,34 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.toolTip = process.project?.displayPath
         item.submenu = submenu
         return item
+    }
+
+    private func addPinItem(to menu: NSMenu, key: String, pinTitle: String, unpinTitle: String) {
+        let isPinned = pinnedKeys.contains(key)
+        let item = NSMenuItem(
+            title: isPinned ? unpinTitle : pinTitle,
+            action: isPinned ? #selector(unpinItem(_:)) : #selector(pinItem(_:)),
+            keyEquivalent: ""
+        )
+        item.representedObject = key
+        item.target = self
+        menu.addItem(item)
+    }
+
+    @objc private func pinItem(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        var keys = pinnedKeys
+        keys.insert(key)
+        pinnedKeys = keys
+        rebuildMenu()
+    }
+
+    @objc private func unpinItem(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        var keys = pinnedKeys
+        keys.remove(key)
+        pinnedKeys = keys
+        rebuildMenu()
     }
 
     @objc private func openInBrowser(_ sender: NSMenuItem) {
