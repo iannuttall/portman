@@ -22,6 +22,10 @@ struct ListeningProcess: Hashable, Sendable {
         }
 
         if let project {
+            if project.isStaleWorktree {
+                return "\(port) · Stale Worktree · \(project.framework ?? prettyCommand) · \(project.name)"
+            }
+
             if project.isOrphan {
                 return "\(port) · Orphan · \(project.framework ?? prettyCommand) · \(project.name)"
             }
@@ -38,6 +42,10 @@ struct ListeningProcess: Hashable, Sendable {
         }
 
         if let project {
+            if project.isStaleWorktree {
+                return "Stale Worktrees"
+            }
+
             if project.isOrphan {
                 return "Orphan Processes"
             }
@@ -210,6 +218,7 @@ struct ProjectMetadata: Hashable, Sendable {
     let name: String
     let framework: String?
     let isOrphan: Bool
+    let isStaleWorktree: Bool
 
     var displayPath: String? {
         guard let path = root ?? cwd else { return nil }
@@ -246,6 +255,10 @@ struct ProcessGroup {
 
     var allOrphans: Bool {
         !processes.isEmpty && processes.allSatisfy { $0.project?.isOrphan == true }
+    }
+
+    var allStaleWorktrees: Bool {
+        !processes.isEmpty && processes.allSatisfy { $0.project?.isStaleWorktree == true }
     }
 
     var dockerContainers: [DockerContainer] {
@@ -707,8 +720,16 @@ final class PortScanner {
         let name = projectName(root: projectRoot, cwd: cwd)
         let framework = frameworkName(root: projectRoot, cwd: cwd, command: command)
         let isOrphan = isOrphanProject(cwd: cwd, root: projectRoot, command: command)
+        let isStaleWorktree = isOrphan && isAgentWorktreePath(cwd)
 
-        return ProjectMetadata(cwd: cwd, root: projectRoot, name: name, framework: framework, isOrphan: isOrphan)
+        return ProjectMetadata(
+            cwd: cwd,
+            root: projectRoot,
+            name: name,
+            framework: framework,
+            isOrphan: isOrphan,
+            isStaleWorktree: isStaleWorktree
+        )
     }
 
     private static func packageRoot(from cwd: String) -> String? {
@@ -887,6 +908,21 @@ final class PortScanner {
             "bun ",
             "deno "
         ].contains { lowerCommand.contains($0) }
+    }
+
+    private static func isAgentWorktreePath(_ cwd: String?) -> Bool {
+        guard let cwd else {
+            return false
+        }
+
+        let lower = cwd.lowercased()
+        return [
+            "/conductor/workspaces/",
+            "/claude/workspaces/",
+            "/codex/workspaces/",
+            "/.codex/workspaces/",
+            "/.claude/workspaces/"
+        ].contains { lower.contains($0) }
     }
 
     private static func hasTanStackStartSignal(
@@ -1228,7 +1264,10 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let dockerProcesses = unpinnedProcesses.filter { $0.container != nil }
         let nonDockerProcesses = unpinnedProcesses.filter { $0.container == nil }
-        let orphanProcesses = nonDockerProcesses.filter { $0.project?.isOrphan == true }
+        let staleWorktreeProcesses = nonDockerProcesses.filter { $0.project?.isStaleWorktree == true }
+        let orphanProcesses = nonDockerProcesses.filter {
+            $0.project?.isOrphan == true && $0.project?.isStaleWorktree != true
+        }
         let regularProcesses = nonDockerProcesses.filter { $0.project?.isOrphan != true }
         var addedSpecialGroup = false
 
@@ -1240,6 +1279,17 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             let group = ProcessGroup(name: "Docker Containers", processes: dockerProcesses)
             menu.addItem(dockerRootMenuItem(for: group))
+            addedSpecialGroup = true
+        }
+
+        if !staleWorktreeProcesses.isEmpty {
+            if addedPinnedSection || addedSpecialGroup {
+                menu.addItem(.separator())
+                addedPinnedSection = false
+            }
+
+            let group = ProcessGroup(name: "Stale Worktrees", processes: staleWorktreeProcesses)
+            menu.addItem(groupMenuItem(for: group))
             addedSpecialGroup = true
         }
 
@@ -1539,6 +1589,9 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if group.allDocker {
             killTitle = "Stop All Containers (\(group.dockerContainers.count))"
             killAction = #selector(stopContainerGroup(_:))
+        } else if group.allStaleWorktrees {
+            killTitle = "Kill All Stale Worktree Processes (\(group.pids.count) ids)"
+            killAction = #selector(killProcessGroup(_:))
         } else if group.allOrphans {
             killTitle = "Kill All Orphan Processes (\(group.pids.count) ids)"
             killAction = #selector(killProcessGroup(_:))
@@ -1551,6 +1604,14 @@ final class PortManagerApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         killAllItem.representedObject = group
         killAllItem.target = self
         submenu.addItem(killAllItem)
+
+        if group.allStaleWorktrees {
+            submenu.addItem(.separator())
+
+            let staleItem = NSMenuItem(title: "Agent worktree project files are missing", action: nil, keyEquivalent: "")
+            staleItem.isEnabled = false
+            submenu.addItem(staleItem)
+        }
 
         if let pinKey = group.pinKey {
             addPinItem(to: submenu, key: pinKey, pinTitle: group.pinTitle, unpinTitle: group.unpinTitle)
@@ -2166,7 +2227,9 @@ if CommandLine.arguments.contains("--list") {
             : "Docker"
         let project = process.container?.displayName ?? process.project?.name ?? "-"
         let path = process.container?.displayPath ?? process.project?.displayPath ?? "-"
-        let state = process.project?.isOrphan == true ? "orphan" : "active"
+        let state = process.project?.isStaleWorktree == true
+            ? "stale-worktree"
+            : (process.project?.isOrphan == true ? "orphan" : "active")
         print("\(process.port)\t\(state)\t\(framework)\t\(project)\t\(pids)\t\(path)")
     }
 } else {
