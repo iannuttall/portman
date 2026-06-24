@@ -22,6 +22,13 @@ scripts/build-app.sh
 open "dist/Port Manager.app"
 ```
 
+Build a drag-install DMG:
+
+```sh
+make dmg
+open dist/Port_Manager-0.1.0.dmg
+```
+
 ## Install locally
 
 For daily use, install a signed local copy into `~/Applications`:
@@ -45,9 +52,16 @@ That will:
 - replace `~/Applications/Port Manager.app`
 - remove quarantine metadata if present
 - verify the code signature
+- enable `Open at Login`
 - launch the installed app
 
-Once launched from `~/Applications`, `Open at Login` has the right bundle shape to work as a normal login item.
+Once launched from `~/Applications`, `Open at Login` has the right bundle shape to work as a normal login item. If macOS says it requires approval, enable Port Manager in `System Settings > General > Login Items`.
+
+Skip login-item registration during install:
+
+```sh
+ENABLE_LOGIN=0 make publish-local
+```
 
 You can override the install location:
 
