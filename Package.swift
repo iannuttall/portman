@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "PortManager",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "PortManager", targets: ["PortManager"])
@@ -14,6 +14,11 @@ let package = Package(
         .executableTarget(
             name: "PortManager",
             path: "Sources/PortManager"
+        ),
+        .testTarget(
+            name: "PortManagerTests",
+            dependencies: ["PortManager"],
+            path: "Tests/PortManagerTests"
         )
     ]
 )
