@@ -173,7 +173,10 @@ struct RootView: View {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(spacing: 0, pinnedViews: []) {
+                // Eager, not lazy. A few dozen rows cost nothing to lay out, and
+                // LazyVStack recycling rows during a refresh moves the scroll
+                // position under the pointer.
+                VStack(spacing: 0) {
                     ForEach(store.sections) { section in
                         sectionView(section)
                     }

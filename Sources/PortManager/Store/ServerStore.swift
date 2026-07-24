@@ -22,25 +22,31 @@ final class ServerStore {
     private(set) var isWarmStart = false
 
     var searchText = "" {
-        didSet { clampSelection() }
+        didSet { inputsChanged() }
     }
 
     var filter: EntryFilter = .all {
-        didSet { clampSelection() }
+        didSet { inputsChanged() }
     }
 
     var sortOrder: SortOrder = Preferences.sortOrder {
-        didSet { Preferences.sortOrder = sortOrder }
+        didSet {
+            Preferences.sortOrder = sortOrder
+            inputsChanged()
+        }
     }
 
     var groupMode: GroupMode = Preferences.groupMode {
-        didSet { Preferences.groupMode = groupMode }
+        didSet {
+            Preferences.groupMode = groupMode
+            inputsChanged()
+        }
     }
 
     var showAllProcesses: Bool = Preferences.showAllProcesses {
         didSet {
             Preferences.showAllProcesses = showAllProcesses
-            clampSelection()
+            inputsChanged()
         }
     }
 
@@ -110,6 +116,7 @@ final class ServerStore {
     private init() {
         entries = SnapshotCache.load()
         isWarmStart = !entries.isEmpty
+        rebuildDerived()
         observeSleepWake()
     }
 
@@ -124,21 +131,28 @@ final class ServerStore {
             .filter { ListShaper.matches($0, query: searchText) }
     }
 
-    var sections: [ServerSection] {
-        ListShaper.sections(
-            for: visibleEntries,
+    /// Derived list state, rebuilt when its inputs change rather than on every
+    /// render pass.
+    ///
+    /// These were computed properties. `conflictPorts` in particular was read once
+    /// per row inside the list body, so the whole folding and conflict pipeline ran
+    /// n times per frame over ~30 servers — enough work during a refresh to show up
+    /// as the list churning.
+    private(set) var sections: [ServerSection] = []
+    private(set) var rows: [ServerRowModel] = []
+    private(set) var conflictPorts: Set<Int> = []
+
+    func rebuildDerived() {
+        let visible = visibleEntries
+
+        sections = ListShaper.sections(
+            for: visible,
             pinnedKeys: Preferences.pinnedKeys,
             mode: groupMode,
             order: sortOrder
         )
-    }
-
-    var rows: [ServerRowModel] {
-        sections.flatMap(\.rows)
-    }
-
-    var conflictPorts: Set<Int> {
-        ListShaper.conflictPorts(in: entries.filter { !isIgnored($0) })
+        rows = sections.flatMap(\.rows)
+        conflictPorts = ListShaper.conflictPorts(in: entries.filter { !isIgnored($0) })
     }
 
     /// Everything currently listed, for "kill all matching".
@@ -324,6 +338,11 @@ final class ServerStore {
             }
         }
 
+        // The probe is TTL-cached, so most cycles it returns exactly what we already
+        // have. Committing that anyway re-rendered the whole list a second time per
+        // scan for no reason.
+        guard updated != entries else { return }
+
         commit(updated)
     }
 
@@ -379,11 +398,16 @@ final class ServerStore {
 
         lastScan = Date()
         isWarmStart = false
-        clampSelection()
+        inputsChanged()
         SnapshotCache.save(updated)
     }
 
     // MARK: - Selection
+
+    private func inputsChanged() {
+        rebuildDerived()
+        clampSelection()
+    }
 
     private func clampSelection() {
         let ids = Set(rows.map(\.id))
@@ -530,8 +554,8 @@ final class ServerStore {
             recentlyKilled[port] = now
         }
 
+        rebuildDerived()
         withAnimation(animation(Theme.Motion.kill)) {
-            // Recomputing derived state is enough — visibleEntries filters these out.
             entries = entries
         }
     }
@@ -586,6 +610,7 @@ final class ServerStore {
         }
 
         Preferences.pinnedKeys = keys
+        rebuildDerived()
         withAnimation(animation(Theme.Motion.listUpdate)) { entries = entries }
     }
 
@@ -612,6 +637,7 @@ final class ServerStore {
     }
 
     private func refreshDerived() {
+        rebuildDerived()
         withAnimation(animation(Theme.Motion.listUpdate)) { entries = entries }
     }
 }

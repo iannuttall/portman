@@ -146,7 +146,7 @@ struct ServerRowView: View {
                     .font(Theme.Typography.meta)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 46, alignment: .leading)
+                    .frame(width: 52, alignment: .leading)
             }
 
             if store.showPageTitles, let title = entry.health?.pageTitle, entry.git?.branch == nil {
