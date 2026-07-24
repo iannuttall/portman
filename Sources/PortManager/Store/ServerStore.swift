@@ -291,7 +291,43 @@ final class ServerStore {
         commit(updated)
     }
 
+    // MARK: - CPU history
+
+    /// A short rolling CPU trace per row, so a row can show whether a server is
+    /// spiking or idling without the user having to watch the number.
+    @ObservationIgnored private var cpuHistory: [String: [Double]] = [:]
+    private static let historyLength = 24
+
+    func cpuTrace(for id: String) -> [Double] {
+        cpuHistory[id] ?? []
+    }
+
+    private func recordCPU(_ entries: [ServerEntry]) {
+        var updated: [String: [Double]] = [:]
+
+        for entry in entries {
+            guard let cpu = entry.metrics?.cpuPercent else {
+                // Keep what we had rather than punching a hole in the trace.
+                updated[entry.id] = cpuHistory[entry.id]
+                continue
+            }
+
+            var trace = cpuHistory[entry.id] ?? []
+            trace.append(cpu)
+            if trace.count > Self.historyLength {
+                trace.removeFirst(trace.count - Self.historyLength)
+            }
+
+            updated[entry.id] = trace
+        }
+
+        // Entries that went away drop their history with them.
+        cpuHistory = updated.compactMapValues { $0 }
+    }
+
     private func commit(_ updated: [ServerEntry]) {
+        recordCPU(updated)
+
         withAnimation(Theme.Motion.listUpdate) {
             entries = updated
         }
@@ -351,8 +387,10 @@ final class ServerStore {
         return URL(string: "\(scheme)://localhost:\(entry.port)") ?? URL(fileURLWithPath: "/")
     }
 
+    /// nil when the server is bound to loopback only — offering a network URL that
+    /// can't resolve is worse than not offering one.
     func networkURL(for entry: ServerEntry) -> String? {
-        guard let networkAddress else { return nil }
+        guard let networkAddress, entry.exposure == .network else { return nil }
         let scheme = entry.health?.scheme ?? "http"
         return "\(scheme)://\(networkAddress):\(entry.port)"
     }

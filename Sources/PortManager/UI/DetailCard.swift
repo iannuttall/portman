@@ -30,6 +30,8 @@ struct DetailCard: View {
                 healthRow(health)
             }
 
+            exposureRow
+
             if let container = entry.container {
                 dockerRow(container)
             }
@@ -175,6 +177,24 @@ struct DetailCard: View {
         if let latency = health.latency { parts.append(Format.latency(latency)) }
         if let title = health.pageTitle { parts.append("“\(title)”") }
         return parts.isEmpty ? "Responding" : parts.joined(separator: " · ")
+    }
+
+    /// Says plainly whether anyone else can reach this. The bind address is in every
+    /// `lsof` scan already and nothing else in this category surfaces it.
+    private var exposureRow: some View {
+        HStack(spacing: Theme.Space.snug) {
+            if entry.exposure == .network, let network = store.networkURL(for: entry) {
+                MetaLabel(symbol: "antenna.radiowaves.left.and.right", text: network)
+
+                IconButton(symbol: "doc.on.doc", help: "Copy network URL") {
+                    store.copy(network)
+                }
+            } else {
+                MetaLabel(symbol: "lock", text: Exposure.loopback.label)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 
     private func dockerRow(_ container: DockerContainer) -> some View {

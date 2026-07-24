@@ -118,7 +118,14 @@ struct ServerRowView: View {
             }
 
             if let cpu = entry.metrics?.cpuPercent {
-                MetaLabel(symbol: nil, text: Format.cpu(cpu), tint: cpu > 80 ? Theme.Colour.hung : nil)
+                HStack(spacing: Theme.Space.tight) {
+                    MetaLabel(symbol: nil, text: Format.cpu(cpu), tint: cpu > 80 ? Theme.Colour.hung : nil)
+
+                    let trace = store.cpuTrace(for: row.id)
+                    if trace.count > 2 {
+                        Sparkline(values: trace, tint: cpu > 80 ? Theme.Colour.hung : .secondary)
+                    }
+                }
             }
 
             if let uptime = entry.metrics?.uptime {
@@ -134,6 +141,13 @@ struct ServerRowView: View {
 
             if entry.health?.state == .hung {
                 MetaLabel(symbol: "exclamationmark.triangle.fill", text: "not responding", tint: Theme.Colour.hung)
+            }
+
+            if entry.exposure == .network {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .help(Exposure.network.label)
             }
         }
         .lineLimit(1)

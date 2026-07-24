@@ -86,6 +86,9 @@ enum ListShaper {
             entry.kind.rawValue
         ]
 
+        // So "lan" or "exposed" finds everything reachable off this machine.
+        if entry.exposure == .network { parts.append("lan network exposed") }
+
         if let subtitle = entry.subtitle { parts.append(subtitle) }
         if let path = entry.displayPath { parts.append(path) }
         if let title = entry.health?.pageTitle { parts.append(title) }

@@ -31,6 +31,22 @@ enum ServerKind: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// How far a listener can be reached from.
+enum Exposure: String, Codable, Sendable, Hashable {
+    /// Bound to 127.0.0.1 / ::1 only — this Mac and nothing else.
+    case loopback
+    /// Bound to 0.0.0.0, ::, or a specific LAN address. Anyone on the same
+    /// network can reach it.
+    case network
+
+    var label: String {
+        switch self {
+        case .loopback: return "This Mac only"
+        case .network: return "Reachable on your network"
+        }
+    }
+}
+
 /// Whether the project behind a listener still exists on disk.
 enum EntryState: String, Codable, Sendable, Hashable {
     case active
@@ -299,6 +315,30 @@ struct ServerEntry: Identifiable, Codable, Hashable, Sendable {
 
     var hasIssue: Bool {
         state != .active || health?.state == .hung
+    }
+
+    /// Derived from the bind addresses `lsof` reported.
+    ///
+    /// A wildcard bind, or any address that isn't loopback, means other machines on
+    /// the network can reach it. This is the difference between a dev server only you
+    /// can see and one the whole coffee shop can.
+    var exposure: Exposure {
+        for address in addresses {
+            let cleaned = address
+                .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                .lowercased()
+
+            if cleaned == "127.0.0.1" || cleaned == "::1" || cleaned == "localhost" {
+                continue
+            }
+
+            if cleaned.hasPrefix("127.") { continue }
+
+            // "*", "0.0.0.0" and "::" are wildcards; anything else is a real interface.
+            return .network
+        }
+
+        return .loopback
     }
 
     private var isSystemProcess: Bool {

@@ -303,6 +303,31 @@ final class ClassificationTests: XCTestCase {
     }
 }
 
+// MARK: - Exposure
+
+final class ExposureTests: XCTestCase {
+    func testLoopbackBindsAreThisMacOnly() {
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["127.0.0.1"]).exposure, .loopback)
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["[::1]"]).exposure, .loopback)
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["127.0.0.1", "[::1]"]).exposure, .loopback)
+    }
+
+    func testWildcardBindsAreReachableOnTheNetwork() {
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["*"]).exposure, .network)
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["0.0.0.0"]).exposure, .network)
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["[::]"]).exposure, .network)
+    }
+
+    func testSpecificInterfaceBindsAreReachableOnTheNetwork() {
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["192.168.1.5"]).exposure, .network)
+    }
+
+    /// One loopback binding doesn't make a wildcard binding safe.
+    func testMixedBindsResolveToTheWiderExposure() {
+        XCTAssertEqual(makeEntry(port: 3000, addresses: ["127.0.0.1", "0.0.0.0"]).exposure, .network)
+    }
+}
+
 // MARK: - Ancestry
 
 final class ProcessAncestryTests: XCTestCase {
