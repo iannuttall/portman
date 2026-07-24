@@ -13,10 +13,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
 
         // Lets a screenshot or a UI check drive the panel without a real click.
-        if ProcessInfo.processInfo.environment["PORTMANAGER_OPEN_ON_LAUNCH"] == "1" {
+        // "expand" also opens the first row, so the detail card can be inspected.
+        let debugOpen = ProcessInfo.processInfo.environment["PORTMANAGER_OPEN_ON_LAUNCH"]
+        if debugOpen == "1" || debugOpen == "expand" {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(600))
                 panelController?.open()
+
+                guard debugOpen == "expand" else { return }
+
+                try? await Task.sleep(for: .seconds(2))
+                if let first = store.rows.first {
+                    store.selectedRowID = first.id
+                    store.toggleExpanded(first.id)
+                }
             }
         }
     }

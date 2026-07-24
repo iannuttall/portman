@@ -1,105 +1,126 @@
 # Port Manager
 
-A tiny macOS menu bar app for seeing listening ports and killing the process that owns one.
+A macOS menu bar app for everything listening on your Mac — what it is, which project it belongs to,
+how hard it's working, and whether it's actually alive.
 
-## Run from source
+Built for people running a lot of dev servers at once.
+
+## What makes it different
+
+**It knows what your servers are.** Not `node (pid 10791)` — `4321 · Astro · web`, with the project
+path, the git branch, and the page title of whatever it's serving. Frameworks are inferred from
+`package.json`, lockfiles, Vite's dep cache and the command line: Astro, Next.js, TanStack Start,
+Vite, Remix, SvelteKit, Nuxt, Angular, Expo, Rails, Django, FastAPI and more.
+
+**It catches wedged servers.** A dev server that's holding its port but no longer answering looks
+identical to a healthy one in every other tool. Port Manager probes each port and flags it:
+`not responding · alive but hung`.
+
+**It shows you the page.** Expand a row and you get a live thumbnail of `localhost:<port>`, so you
+can tell which of your six Astro servers is the one you wanted.
+
+**It knows about your dead ones.** Servers whose project folder has been deleted, and dev servers
+left behind by agent worktrees (Conductor, Claude, Codex), get grouped into collapsed sections with
+a single `Kill all` — instead of burying the three projects you actually care about.
+
+**It understands Docker.** Forwarded ports resolve back to the container, compose project, service
+and working directory, and the action is `Stop container` rather than killing Docker Desktop.
+
+## Using it
+
+Click the menu bar icon and start typing. Search matches ports, project names, frameworks, paths,
+git branches and page titles.
+
+| | |
+|---|---|
+| `↑` `↓` | move through the list |
+| `→` `←` | expand / collapse a row |
+| `⏎` | open in your browser |
+| `⌘⏎` | open the project in your editor |
+| `⌘C` | copy the local URL |
+| `⌘⌫` | kill the selected server |
+| `esc` | collapse, then clear the search, then close |
+
+Wrap a search in slashes to use a regular expression — `/astro.*43[0-9]{2}/` — then hit
+**Kill all N** in the footer. That's "kill by regex" without a separate feature for it.
+
+Sort by port, name, CPU, memory, uptime or most recently started. Group smartly (the default), flat,
+by project, or by kind.
+
+Every action lives on the expanded row: open, copy local or network URL, reveal in Finder, open in
+your terminal or editor, restart the dev server with the right package manager, pin, ignore, kill.
+Nothing is more than one click deep.
+
+## Metrics
+
+CPU, memory, uptime, thread count and an energy estimate come from `libproc`, sampled in the
+background. No root, no helper tool, no polling `ps` in a loop.
+
+Processes owned by another user or by root can't be read, and those show `—` rather than a
+misleading `0`.
+
+## Settings
+
+Choose your terminal (Ghostty, iTerm, Terminal, WezTerm, Warp, Alacritty, kitty), editor (VS Code,
+Cursor, Zed, Sublime, Xcode) and browser — only the ones you actually have installed are offered.
+Set the refresh interval, pick what the menu bar shows, and manage ignore rules for noisy ports,
+apps, projects and containers.
+
+## Install
 
 ```sh
-swift run PortManager
+make publish-local
 ```
 
-Check the scanner without opening the menu bar app:
+Builds a release bundle, ad-hoc signs it, installs to `~/Applications`, and enables Open at Login.
+Run the same command to update.
+
+Override the destination or sign with a real identity:
 
 ```sh
-swift run PortManager --list
-```
-
-## Build the app
-
-```sh
-chmod +x scripts/build-app.sh
-scripts/build-app.sh
-open "dist/Port Manager.app"
+INSTALL_DIR="/Applications" make publish-local
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make publish-local
+ENABLE_LOGIN=0 make publish-local
 ```
 
 Build a drag-install DMG:
 
 ```sh
 make dmg
-open dist/Port_Manager-0.1.0.dmg
 ```
 
-## Install locally
+Requires macOS 15 or later.
 
-For daily use, install a signed local copy into `~/Applications`:
+## Development
 
 ```sh
-chmod +x scripts/*.sh
-make publish-local
+swift run PortManager          # run from source
+swift run PortManager --list   # scan and print as TSV, no UI
+swift test                     # parsing, search, sorting, folding, classification
+make build                     # build the .app bundle into dist/
 ```
 
-Use the same command whenever you make changes:
+`--list` is the fastest way to check detection without opening the panel.
 
-```sh
-make update-local
-```
-
-That will:
-
-- build a release app bundle
-- ad-hoc sign the `.app`
-- quit any running dev or installed copy
-- replace `~/Applications/Port Manager.app`
-- remove quarantine metadata if present
-- verify the code signature
-- enable `Open at Login`
-- launch the installed app
-
-Once launched from `~/Applications`, `Open at Login` has the right bundle shape to work as a normal login item. If macOS says it requires approval, enable Port Manager in `System Settings > General > Login Items`.
-
-Skip login-item registration during install:
-
-```sh
-ENABLE_LOGIN=0 make publish-local
-```
-
-You can override the install location:
-
-```sh
-INSTALL_DIR="/Applications" make publish-local
-```
-
-You can also sign with a real Developer ID identity if you have one:
-
-```sh
-SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make publish-local
-```
-
-## What it does
-
-- Shows the count of visible listening ports in the menu bar.
-- Lets you pin useful projects, containers, or individual ports to the top.
-- Lists ports as `3000 · Astro · my-project` when it can identify the project.
-- Infers common dev stacks from project files, including Astro, Next.js, TanStack Start, Vite, React, SvelteKit, Nuxt, Rails, Django, and FastAPI.
-- Shows the project path in each port submenu, with actions to copy it or reveal it in Finder.
-- Opens detected project folders in Ghostty or VS Code.
-- Restarts detected Node dev servers with the right package manager when a `dev` or `start` script exists.
-- Shows a `Port Conflicts` warning group when multiple visible listeners share the same port.
-- Groups stale agent worktree dev servers separately when project files disappear, with a single cleanup action.
-- Adds ignore rules through Settings and quick Ignore actions for noisy ports, apps, projects, or containers.
-- Keeps Docker Desktop forwarded ports under one `Docker Containers` submenu, identified by container, compose project/service, image, and working directory.
-- Uses `Stop Container` for Docker ports instead of killing Docker Desktop itself.
-- Collapses multi-port dev servers to their primary app port and moves helper/debug ports under `Other Listening Ports`.
-- Refreshes port data in the background so opening the menu stays fast.
-- Hides noisy system ports by default. Use `Show System Ports` to see everything.
-- Groups repeated projects when the list is long, e.g. `Astro · my-project · 12 ports`.
-- Adds `Kill All Processes` on grouped projects so you can clear every PID behind a noisy project at once.
-- Opens `http://localhost:<port>` in the browser.
-- Copies local and network URLs.
-- Sends `SIGTERM` to kill the owning process.
-
-Port detection uses:
+Port discovery uses:
 
 ```sh
 /usr/sbin/lsof -nP -iTCP -sTCP:LISTEN -F pcLn
 ```
+
+### Layout
+
+```
+Core/       scanning, project and framework detection, Docker, metrics, git
+Services/   health probing, page previews, terminal attach, app launching
+Store/      observable state, filtering, sorting, grouping, preferences
+UI/         status item, panel, list, detail card, settings
+```
+
+Core is pure and testable; the UI never shells out.
+
+## Permissions
+
+Focusing the terminal tab a server runs in uses AppleScript, so macOS asks for Automation access the
+first time. Declining it is fine — the app falls back to opening a new terminal at the project root,
+which is what happens anyway for servers that have outlived their shell.

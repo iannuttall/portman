@@ -109,7 +109,15 @@ final class PreviewSnapshotter {
         // WebKit needs a real bundle to start its helper processes. Under `swift run`
         // there isn't one, and asking anyway takes down the process.
         guard Bundle.main.bundleIdentifier != nil else { return nil }
-        guard let url = URL(string: "http://127.0.0.1:\(port)/") else { return nil }
+
+        // Same split as `HealthProbe`: a server that bound `localhost` may only be
+        // listening on `::1`, and nothing at all answers on 127.0.0.1.
+        if let image = await render(port: port, host: "127.0.0.1") { return image }
+        return await render(port: port, host: "[::1]")
+    }
+
+    private func render(port: Int, host: String) async -> NSImage? {
+        guard let url = URL(string: "http://\(host):\(port)/") else { return nil }
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
