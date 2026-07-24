@@ -254,19 +254,33 @@ struct SectionHeader: View {
 
 /// Tiny CPU history trace. Deliberately unlabelled — it's a texture that shows
 /// "busy or idle" at a glance, and the exact number is right next to it.
+///
+/// Two rules keep it calm enough to sit in a list that refreshes every two seconds:
+///
+/// - **Fixed y scale.** Scaling to the window's own maximum meant an idle server
+///   bouncing between 0% and 4% redrew as a full-height cliff every refresh. The
+///   axis is floored, so idle noise stays a flat line near the bottom and only real
+///   load climbs.
+/// - **Fixed x slots.** Points occupy `capacity` slots and fill from the right, so
+///   samples slide in rather than the whole trace restretching as history grows.
 struct Sparkline: View {
     let values: [Double]
     var tint: Color = .secondary
+    var capacity: Int = 24
+    var minimumScale: Double = 25
 
     var body: some View {
         GeometryReader { geometry in
-            let maximum = max(values.max() ?? 1, 1)
-            let step = values.count > 1 ? geometry.size.width / CGFloat(values.count - 1) : 0
+            let ceiling = max(values.max() ?? 0, minimumScale)
+            let slots = max(capacity - 1, 1)
+            let step = geometry.size.width / CGFloat(slots)
+            let offset = max(capacity - values.count, 0)
 
             Path { path in
                 for (index, value) in values.enumerated() {
-                    let x = CGFloat(index) * step
-                    let y = geometry.size.height * (1 - CGFloat(value / maximum))
+                    let clamped = min(max(value, 0), ceiling)
+                    let x = CGFloat(offset + index) * step
+                    let y = geometry.size.height * (1 - CGFloat(clamped / ceiling))
                     let point = CGPoint(x: x, y: y)
 
                     if index == 0 {
@@ -276,7 +290,10 @@ struct Sparkline: View {
                     }
                 }
             }
-            .stroke(tint.opacity(0.7), style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
+            .stroke(
+                tint.opacity(0.7),
+                style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round)
+            )
         }
         .frame(width: Theme.Size.sparklineWidth, height: Theme.Size.sparklineHeight)
     }
