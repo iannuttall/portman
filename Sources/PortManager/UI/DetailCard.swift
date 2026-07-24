@@ -196,7 +196,7 @@ struct DetailCard: View {
 
             ForEach(row.related) { related in
                 HStack(spacing: Theme.Space.snug) {
-                    Text("\(related.port)")
+                    Text(verbatim: String(related.port))
                         .font(Theme.Typography.metaMono)
                         .foregroundStyle(.secondary)
 

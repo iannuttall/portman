@@ -23,6 +23,7 @@ struct ServerSection: Identifiable, Hashable, Sendable {
     enum Style: String, Sendable, Hashable {
         case pinned
         case stale
+        case orphan
         case main
         case project
         case kind
@@ -33,7 +34,15 @@ struct ServerSection: Identifiable, Hashable, Sendable {
     let style: Style
     let rows: [ServerRowModel]
 
-    var isCollapsible: Bool { style == .stale || style == .project }
+    var isCollapsible: Bool {
+        style == .stale || style == .orphan || style == .project
+    }
+
+    /// Dead and abandoned servers are worth listing but not worth reading every
+    /// time the panel opens, so they start folded away.
+    var startsCollapsed: Bool {
+        style == .stale || style == .orphan
+    }
 }
 
 /// Pure list-shaping: search, sort, fold, group. No I/O, no state — every
@@ -227,14 +236,27 @@ enum ListShaper {
             )
 
         case .smart:
-            // Stale agent worktrees pile up and are individually uninteresting,
-            // so they get their own collapsible section. Everything else stays flat.
+            // Abandoned servers pile up — nine dead Astro temp processes drown out
+            // the three you're actually working on. They keep their own collapsed
+            // sections; everything live stays flat.
             let stale = rest.filter { $0.state == .staleWorktree }
-            let live = rest.filter { $0.state != .staleWorktree }
+            let orphans = rest.filter { $0.state == .orphan }
+            let live = rest.filter { $0.state == .active }
 
             if !live.isEmpty {
                 sections.append(
                     ServerSection(id: "main", title: nil, style: .main, rows: folded(live, order: order))
+                )
+            }
+
+            if !orphans.isEmpty {
+                sections.append(
+                    ServerSection(
+                        id: "orphans",
+                        title: "Orphans",
+                        style: .orphan,
+                        rows: folded(orphans, order: order)
+                    )
                 )
             }
 

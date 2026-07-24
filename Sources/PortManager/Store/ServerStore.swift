@@ -370,6 +370,18 @@ final class ServerStore {
         suppress(ports: [row.entry.port] + row.related.map(\.port))
     }
 
+    /// Clears out a whole section — the "kill every dead worktree server" action.
+    func kill(rows targets: [ServerRowModel]) {
+        let containerIDs = targets.compactMap { $0.entry.container?.id }
+        if !containerIDs.isEmpty {
+            stopContainers(containerIDs)
+        }
+
+        let pids = targets.filter { $0.entry.container == nil }.flatMap(\.allPIDs)
+        signal(pids: Array(Set(pids)).sorted())
+        suppress(ports: targets.flatMap { [$0.entry.port] + $0.related.map(\.port) })
+    }
+
     func killAllMatching() {
         let containerIDs = rows.compactMap { $0.entry.container?.id }
         if !containerIDs.isEmpty {

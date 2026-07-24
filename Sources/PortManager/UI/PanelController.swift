@@ -18,6 +18,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let store: ServerStore
     private let statusItem: NSStatusItem
     private var panel: KeyablePanel?
+    private var hostingView: NSHostingView<RootView>?
     private var outsideClickMonitor: Any?
     private var localKeyMonitor: Any?
 
@@ -105,6 +106,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         let panel = panel ?? makePanel()
         self.panel = panel
 
+        resizeToFit(panel)
         position(panel)
         store.panelDidOpen()
 
@@ -142,10 +144,23 @@ final class PanelController: NSObject, NSWindowDelegate {
         }
 
         let hosting = NSHostingView(rootView: root)
-        hosting.sizingOptions = [.preferredContentSize]
+        hosting.sizingOptions = [.intrinsicContentSize]
         panel.contentView = hosting
+        hostingView = hosting
 
         return panel
+    }
+
+    /// The list grows and shrinks as servers come and go, so the panel is resized
+    /// to its content every time it opens rather than pinned to a fixed height.
+    private func resizeToFit(_ panel: NSPanel) {
+        guard let hostingView else { return }
+
+        hostingView.layoutSubtreeIfNeeded()
+        let fitting = hostingView.fittingSize
+
+        let height = min(max(fitting.height, 120), Theme.Panel.maxHeight + 140)
+        panel.setContentSize(NSSize(width: Theme.Panel.width, height: height))
     }
 
     /// Drops the panel under the status item, nudged back on screen if the item

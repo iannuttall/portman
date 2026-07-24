@@ -201,6 +201,9 @@ struct SectionHeader: View {
     var count: Int?
     var isCollapsed: Bool?
     var toggle: (() -> Void)?
+    var killAll: (() -> Void)?
+
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: Theme.Space.snug) {
@@ -223,12 +226,27 @@ struct SectionHeader: View {
             }
 
             Spacer()
+
+            // Clearing out a pile of dead servers is the whole point of these
+            // sections, so the action lives right on the header.
+            if let killAll, isHovered {
+                Button(action: killAll) {
+                    Text("Kill all")
+                        .font(Theme.Typography.badge)
+                        .foregroundStyle(Theme.Colour.destructive)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
         }
         .padding(.horizontal, Theme.Space.gutter)
         .padding(.top, Theme.Space.comfy)
         .padding(.bottom, Theme.Space.tight)
         .contentShape(Rectangle())
         .onTapGesture { toggle?() }
+        .onHover { hovering in
+            withAnimation(Theme.Motion.hover) { isHovered = hovering }
+        }
     }
 }
 

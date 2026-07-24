@@ -462,13 +462,17 @@ private struct Context: @unchecked Sendable {
     }
 }
 
-/// Accepts whatever certificate 127.0.0.1 presents. Dev servers sign their own, and this
+/// Accepts whatever certificate loopback presents. Dev servers sign their own, and this
 /// session is only ever pointed at loopback — it never carries a request off the machine.
-private final class LoopbackTrustDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+///
+/// This has to be the *task*-level challenge method: `URLSession.bytes(for:)` installs its
+/// own bridge as the task delegate, and a session-level `didReceive` is never consulted.
+private final class LoopbackTrustDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private static let allowedHosts: Set<String> = ["127.0.0.1", "::1", "[::1]", "localhost"]
 
     func urlSession(
         _ session: URLSession,
+        task: URLSessionTask,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {

@@ -46,7 +46,9 @@ struct ServerRowView: View {
         HStack(spacing: Theme.Space.regular) {
             StatusDot(entry: entry)
 
-            Text("\(entry.port)")
+            // verbatim: a port is an identifier, not a quantity — plain
+            // interpolation localises it into "4,321".
+            Text(verbatim: String(entry.port))
                 .font(Theme.Typography.port)
                 .foregroundStyle(.primary)
                 .frame(minWidth: 40, alignment: .leading)
@@ -226,7 +228,7 @@ struct RowContextMenu: View {
         Button(store.isPinned(entry) ? "Unpin \(entry.pinNoun)" : "Pin \(entry.pinNoun)") {
             store.togglePin(entry)
         }
-        Button("Ignore Port \(entry.port)") { store.ignorePort(entry) }
+        Button("Ignore Port " + String(entry.port)) { store.ignorePort(entry) }
         Button("Ignore \(entry.pinNoun)") { store.ignoreTarget(entry) }
 
         Divider()

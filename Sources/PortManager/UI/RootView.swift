@@ -6,6 +6,9 @@ struct RootView: View {
 
     @FocusState private var searchFocused: Bool
     @State private var collapsedSections: Set<String> = []
+    /// Sections we've already auto-folded once, so a manual expand isn't undone
+    /// on the next scan.
+    @State private var autoCollapsed: Set<String> = []
 
     init(store: ServerStore, dismiss: @escaping () -> Void) {
         self.store = store
@@ -27,7 +30,20 @@ struct RootView: View {
             RoundedRectangle(cornerRadius: Theme.Panel.cornerRadius)
                 .strokeBorder(Theme.Colour.separator, lineWidth: 0.5)
         )
-        .onAppear { searchFocused = true }
+        .onAppear {
+            searchFocused = true
+            applyDefaultCollapse()
+        }
+        .onChange(of: store.sections.map(\.id)) { _, _ in
+            applyDefaultCollapse()
+        }
+    }
+
+    private func applyDefaultCollapse() {
+        for section in store.sections where section.startsCollapsed && !autoCollapsed.contains(section.id) {
+            autoCollapsed.insert(section.id)
+            collapsedSections.insert(section.id)
+        }
     }
 
     // MARK: - Header
@@ -156,7 +172,8 @@ struct RootView: View {
                 title: title,
                 count: section.rows.count,
                 isCollapsed: section.isCollapsible ? collapsedSections.contains(section.id) : nil,
-                toggle: section.isCollapsible ? { toggleSection(section.id) } : nil
+                toggle: section.isCollapsible ? { toggleSection(section.id) } : nil,
+                killAll: section.startsCollapsed ? { store.kill(rows: section.rows) } : nil
             )
         }
 
