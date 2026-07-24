@@ -303,6 +303,49 @@ final class ClassificationTests: XCTestCase {
     }
 }
 
+// MARK: - Ancestry
+
+final class ProcessAncestryTests: XCTestCase {
+    func testTrustsShellsAndCodingAgentsByExecutableName() {
+        XCTAssertTrue(ProcessAncestry.isDeveloperTool(name: "zsh", path: nil))
+        XCTAssertTrue(ProcessAncestry.isDeveloperTool(name: "claude", path: nil))
+        XCTAssertTrue(ProcessAncestry.isDeveloperTool(name: nil, path: "/Users/x/.bun/bin/opencode"))
+    }
+
+    func testTrustsToolsRunningInsideTheirAppBundle() {
+        XCTAssertTrue(ProcessAncestry.isDeveloperTool(
+            name: "node",
+            path: "/Applications/Cursor.app/Contents/MacOS/node"
+        ))
+        XCTAssertTrue(ProcessAncestry.isDeveloperTool(
+            name: nil,
+            path: "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+        ))
+    }
+
+    /// `zed`, `warp`, `kitty` and `goose` are ordinary words. Matching them as bare path
+    /// tokens promotes anything living in a directory that happens to contain one.
+    func testDoesNotTrustToolNamesAppearingIncidentallyInAPath() {
+        XCTAssertFalse(ProcessAncestry.isDeveloperTool(
+            name: "python3",
+            path: "/Users/x/dev/zed-experiments/server.py"
+        ))
+        XCTAssertFalse(ProcessAncestry.isDeveloperTool(
+            name: "node",
+            path: "/Users/x/projects/kitty-cam/index.js"
+        ))
+        XCTAssertFalse(ProcessAncestry.isDeveloperTool(
+            name: "ruby",
+            path: "/Users/x/code/goose-tracker/app.rb"
+        ))
+    }
+
+    func testDoesNotTrustOrdinarySystemDaemons() {
+        XCTAssertFalse(ProcessAncestry.isDeveloperTool(name: "launchd", path: "/sbin/launchd"))
+        XCTAssertFalse(ProcessAncestry.isDeveloperTool(name: "rapportd", path: "/usr/libexec/rapportd"))
+    }
+}
+
 // MARK: - Formatting
 
 final class FormatTests: XCTestCase {

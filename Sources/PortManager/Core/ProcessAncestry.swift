@@ -109,8 +109,10 @@ enum ProcessAncestry {
         let lower = path.lowercased()
         if matchesName(URL(fileURLWithPath: lower).lastPathComponent) { return true }
 
-        let tokens = Set(lower.split { !$0.isLetter && !$0.isNumber }.map(String.init))
-        if !tokens.isDisjoint(with: pathTokens) { return true }
+        // Only as an app bundle, never as a bare token anywhere in the path. `zed`,
+        // `warp`, `kitty`, `goose` and `roo` are ordinary words — matching them loosely
+        // promotes anything living under ~/dev/zed-experiments into a trusted tool.
+        if pathTokens.contains(where: { lower.contains("/\($0).app/") }) { return true }
 
         return pathPhrases.contains { lower.contains($0) }
     }

@@ -47,6 +47,11 @@ final class ServerStore {
     var selectedRowID: String?
     var expandedRowID: String?
 
+    /// A bulk kill waiting on confirmation.
+    var pendingKill: PendingKill?
+    /// Transient footer message when an action didn't do what the UI implied.
+    var actionMessage: String?
+
     // MARK: Collaborators
 
     @ObservationIgnored private let scanner = PortScanner()
@@ -55,6 +60,7 @@ final class ServerStore {
     @ObservationIgnored private let healthProbe = HealthProbe()
 
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    @ObservationIgnored private var messageTask: Task<Void, Never>?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var isPanelOpen = false
 
@@ -370,7 +376,29 @@ final class ServerStore {
         suppress(ports: [row.entry.port] + row.related.map(\.port))
     }
 
-    /// Clears out a whole section — the "kill every dead worktree server" action.
+    /// Bulk kills ask first. A single row is cheap to restart; wiping out every server
+    /// behind a filter is not, and there is no undo for it.
+    struct PendingKill: Identifiable {
+        let id = UUID()
+        let rows: [ServerRowModel]
+        let title: String
+    }
+
+    func requestKill(rows targets: [ServerRowModel], title: String) {
+        guard !targets.isEmpty else { return }
+        pendingKill = PendingKill(rows: targets, title: title)
+    }
+
+    func confirmPendingKill() {
+        guard let pendingKill else { return }
+        self.pendingKill = nil
+        kill(rows: pendingKill.rows)
+    }
+
+    func cancelPendingKill() {
+        pendingKill = nil
+    }
+
     func kill(rows targets: [ServerRowModel]) {
         let containerIDs = targets.compactMap { $0.entry.container?.id }
         if !containerIDs.isEmpty {
@@ -382,23 +410,35 @@ final class ServerStore {
         suppress(ports: targets.flatMap { [$0.entry.port] + $0.related.map(\.port) })
     }
 
-    func killAllMatching() {
-        let containerIDs = rows.compactMap { $0.entry.container?.id }
-        if !containerIDs.isEmpty {
-            stopContainers(containerIDs)
+    /// Sends SIGTERM and reports what actually happened.
+    ///
+    /// `kill(2)` fails with EPERM for processes owned by root or another user, and the
+    /// row animating away regardless would be a lie — the server is still there, and it
+    /// reappears on the next scan with no explanation.
+    private func signal(pids: [Int32]) {
+        var denied = 0
+
+        for pid in pids where Darwin.kill(pid, SIGTERM) != 0 {
+            if errno == EPERM { denied += 1 }
         }
 
-        let pids = rows.filter { $0.entry.container == nil }.flatMap(\.allPIDs)
-        signal(pids: Array(Set(pids)).sorted())
-        suppress(ports: rows.flatMap { [$0.entry.port] + $0.related.map(\.port) })
-    }
-
-    private func signal(pids: [Int32]) {
-        for pid in pids {
-            Darwin.kill(pid, SIGTERM)
+        if denied > 0 {
+            actionMessage = denied == 1
+                ? "Couldn't kill that process — it belongs to another user."
+                : "Couldn't kill \(denied) processes — they belong to another user."
+            clearActionMessageLater()
         }
 
         refresh(force: true)
+    }
+
+    private func clearActionMessageLater() {
+        messageTask?.cancel()
+        messageTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            self?.actionMessage = nil
+        }
     }
 
     private func suppress(ports: [Int]) {

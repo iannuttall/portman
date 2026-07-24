@@ -37,6 +37,26 @@ struct RootView: View {
         .onChange(of: store.sections.map(\.id)) { _, _ in
             applyDefaultCollapse()
         }
+        .confirmationDialog(
+            confirmationTitle,
+            isPresented: Binding(
+                get: { store.pendingKill != nil },
+                set: { if !$0 { store.cancelPendingKill() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Kill \(store.pendingKill?.rows.count ?? 0) servers", role: .destructive) {
+                store.confirmPendingKill()
+            }
+            Button("Cancel", role: .cancel) { store.cancelPendingKill() }
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    private var confirmationTitle: String {
+        guard let pending = store.pendingKill else { return "" }
+        return "Kill \(pending.rows.count) servers \(pending.title)?"
     }
 
     private func applyDefaultCollapse() {
@@ -173,7 +193,9 @@ struct RootView: View {
                 count: section.rows.count,
                 isCollapsed: section.isCollapsible ? collapsedSections.contains(section.id) : nil,
                 toggle: section.isCollapsible ? { toggleSection(section.id) } : nil,
-                killAll: section.startsCollapsed ? { store.kill(rows: section.rows) } : nil
+                killAll: section.startsCollapsed
+                    ? { store.requestKill(rows: section.rows, title: title.lowercased()) }
+                    : nil
             )
         }
 
@@ -250,7 +272,9 @@ struct RootView: View {
         HStack(spacing: Theme.Space.regular) {
             Text(summary)
                 .font(Theme.Typography.meta)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(store.actionMessage == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Theme.Colour.hung))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
 
@@ -260,7 +284,7 @@ struct RootView: View {
                     symbol: "xmark",
                     destructive: true
                 ) {
-                    store.killAllMatching()
+                    store.requestKill(rows: store.rows, title: "matching this filter")
                 }
             }
         }
@@ -269,6 +293,7 @@ struct RootView: View {
     }
 
     private var summary: String {
+        if let message = store.actionMessage { return message }
         if store.isScanning && store.entries.isEmpty { return "Scanning…" }
 
         let count = store.rows.count

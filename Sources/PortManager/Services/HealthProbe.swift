@@ -431,7 +431,7 @@ private struct Context: @unchecked Sendable {
 
     init(timeout: TimeInterval) {
         self.timeout = timeout
-        plain = Context.session(timeout: timeout, delegate: nil)
+        plain = Context.session(timeout: timeout, delegate: LoopbackTrustDelegate())
         insecure = Context.session(timeout: timeout, delegate: LoopbackTrustDelegate())
     }
 
@@ -484,6 +484,28 @@ private final class LoopbackTrustDelegate: NSObject, URLSessionTaskDelegate, @un
         }
 
         completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    /// Refuses to follow a redirect that leaves the machine.
+    ///
+    /// A dev server that 302s to a staging or production host would otherwise have us
+    /// fetching it — an off-box request the user never asked for, on a timer, for every
+    /// port they happen to be running. Redirects that stay on loopback are followed
+    /// normally; anything else stops and the redirect response itself is the answer,
+    /// which is all the health check needs.
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        guard let host = request.url?.host, Self.allowedHosts.contains(host) else {
+            completionHandler(nil)
+            return
+        }
+
+        completionHandler(request)
     }
 }
 
