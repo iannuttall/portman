@@ -1,7 +1,42 @@
 import Foundation
 
-final class PortScanner {
-    func listeningProcesses() -> [ListeningProcess] {
+/// Turns `lsof` output into enriched `ServerEntry` values.
+///
+/// Runs entirely off the main actor — every call here shells out or hits the
+/// filesystem, and the panel must stay responsive while it does.
+struct PortScanner: Sendable {
+    func scan() -> [ServerEntry] {
+        let snapshots = Self.snapshots()
+        guard !snapshots.isEmpty else { return [] }
+
+        let metadataByPID = ProjectDetector.metadataByPID(for: snapshots)
+        let needsDocker = snapshots.contains { $0.command.lowercased() == "com.docker.backend" }
+        let containersByHostPort = needsDocker ? DockerScanner.containersByHostPort() : [:]
+
+        let entries = snapshots.flatMap { snapshot in
+            snapshot.ports.map { port, addresses in
+                let container = snapshot.command.lowercased() == "com.docker.backend"
+                    ? containersByHostPort[port]
+                    : nil
+
+                return ServerEntry(
+                    port: port,
+                    pids: [snapshot.pid],
+                    command: snapshot.command,
+                    user: snapshot.user,
+                    addresses: addresses.sorted(),
+                    project: metadataByPID[snapshot.pid],
+                    container: container
+                )
+            }
+        }
+
+        return Self.coalesced(entries).sorted(by: Self.byPortThenPID)
+    }
+
+    // MARK: - lsof
+
+    static func snapshots() -> [ProcessSnapshot] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         process.arguments = ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcLn"]
@@ -23,6 +58,12 @@ final class PortScanner {
             return []
         }
 
+        return parse(output)
+    }
+
+    /// Parses `lsof -F` field output: one field per line, first character is the
+    /// field tag, and a `p` line starts a new process record.
+    static func parse(_ output: String) -> [ProcessSnapshot] {
         var snapshots: [ProcessSnapshot] = []
         var current: ProcessSnapshot?
 
@@ -43,9 +84,8 @@ final class PortScanner {
             case "L":
                 current?.user = value
             case "n":
-                guard let port = Self.port(from: value) else { continue }
-                let address = Self.address(from: value)
-                current?.ports[port, default: []].insert(address)
+                guard let port = port(from: value) else { continue }
+                current?.ports[port, default: []].insert(address(from: value))
             default:
                 continue
             }
@@ -55,39 +95,11 @@ final class PortScanner {
             snapshots.append(current)
         }
 
-        let metadataByPID = ProjectDetector.metadataByPID(for: snapshots)
-        let dockerContainersByHostPort = snapshots.contains {
-            $0.command.lowercased() == "com.docker.backend"
-        } ? DockerScanner.containersByHostPort() : [:]
-
-        let rawProcesses = snapshots.flatMap { snapshot in
-            snapshot.ports.map { port, addresses in
-                let container = snapshot.command.lowercased() == "com.docker.backend"
-                    ? dockerContainersByHostPort[port]
-                    : nil
-
-                return ListeningProcess(
-                    pids: [snapshot.pid],
-                    command: snapshot.command,
-                    user: snapshot.user,
-                    port: port,
-                    addresses: Array(addresses).sorted(),
-                    project: metadataByPID[snapshot.pid],
-                    container: container
-                )
-            }
-        }
-
-        return Self.coalesced(rawProcesses).sorted {
-            if $0.port == $1.port {
-                return ($0.primaryPID ?? 0) < ($1.primaryPID ?? 0)
-            }
-
-            return $0.port < $1.port
-        }
+        return snapshots
     }
 
-    private static func port(from endpoint: String) -> Int? {
+    /// Handles both `127.0.0.1:3000` and the bracketed IPv6 form `[::1]:3000`.
+    static func port(from endpoint: String) -> Int? {
         if endpoint.hasPrefix("[") {
             guard let bracket = endpoint.lastIndex(of: "]") else { return nil }
             let remainder = endpoint[endpoint.index(after: bracket)...]
@@ -99,7 +111,7 @@ final class PortScanner {
         return Int(endpoint[endpoint.index(after: colon)...])
     }
 
-    private static func address(from endpoint: String) -> String {
+    static func address(from endpoint: String) -> String {
         if endpoint.hasPrefix("["), let bracket = endpoint.lastIndex(of: "]") {
             return String(endpoint[endpoint.startIndex...bracket])
         }
@@ -111,7 +123,12 @@ final class PortScanner {
         return String(endpoint[..<colon])
     }
 
-    private static func coalesced(_ processes: [ListeningProcess]) -> [ListeningProcess] {
+    // MARK: - Coalescing
+
+    /// One server bound to both IPv4 and IPv6 shows up as several `lsof` rows.
+    /// Merge anything that agrees on command, user, port, project and container
+    /// so the list shows one row per actual listener.
+    static func coalesced(_ entries: [ServerEntry]) -> [ServerEntry] {
         struct Key: Hashable {
             let command: String
             let user: String
@@ -122,29 +139,43 @@ final class PortScanner {
 
         var pidsByKey: [Key: Set<Int32>] = [:]
         var addressesByKey: [Key: Set<String>] = [:]
+        var order: [Key] = []
 
-        for process in processes {
+        for entry in entries {
             let key = Key(
-                command: process.command,
-                user: process.user,
-                port: process.port,
-                project: process.project,
-                container: process.container
+                command: entry.command,
+                user: entry.user,
+                port: entry.port,
+                project: entry.project,
+                container: entry.container
             )
-            pidsByKey[key, default: []].formUnion(process.pids)
-            addressesByKey[key, default: []].formUnion(process.addresses)
+
+            if pidsByKey[key] == nil {
+                order.append(key)
+            }
+
+            pidsByKey[key, default: []].formUnion(entry.pids)
+            addressesByKey[key, default: []].formUnion(entry.addresses)
         }
 
-        return pidsByKey.map { key, pids in
-            ListeningProcess(
-                pids: Array(pids).sorted(),
+        return order.map { key in
+            ServerEntry(
+                port: key.port,
+                pids: (pidsByKey[key] ?? []).sorted(),
                 command: key.command,
                 user: key.user,
-                port: key.port,
-                addresses: Array(addressesByKey[key] ?? []).sorted(),
+                addresses: (addressesByKey[key] ?? []).sorted(),
                 project: key.project,
                 container: key.container
             )
         }
+    }
+
+    static func byPortThenPID(_ lhs: ServerEntry, _ rhs: ServerEntry) -> Bool {
+        if lhs.port == rhs.port {
+            return (lhs.primaryPID ?? 0) < (rhs.primaryPID ?? 0)
+        }
+
+        return lhs.port < rhs.port
     }
 }

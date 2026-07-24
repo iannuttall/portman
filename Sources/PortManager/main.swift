@@ -21,22 +21,26 @@ func loginStatusText(_ status: SMAppService.Status) -> String {
     }
 }
 
-if CommandLine.arguments.contains("--list") {
-    for process in PortScanner().listeningProcesses() {
-        let pids = process.pids.map(String.init).joined(separator: ",")
-        let framework = process.container == nil
-            ? (process.project?.framework ?? process.prettyCommand)
+/// Prints the scan as TSV. The fastest way to check detection without the UI.
+func printList() {
+    for entry in PortScanner().scan() {
+        let pids = entry.pids.map(String.init).joined(separator: ",")
+        let framework = entry.container == nil
+            ? (entry.project?.frameworkLabel ?? entry.prettyCommand)
             : "Docker"
-        let project = process.container?.displayName ?? process.project?.name ?? "-"
-        let path = process.container?.displayPath ?? process.project?.displayPath ?? "-"
-        let state = process.project?.isStaleWorktree == true
-            ? "stale-worktree"
-            : (process.project?.isOrphan == true ? "orphan" : "active")
-        print("\(process.port)\t\(state)\t\(framework)\t\(project)\t\(pids)\t\(path)")
+        let path = entry.displayPath ?? "-"
+
+        print("\(entry.port)\t\(entry.state.rawValue)\t\(entry.kind.rawValue)\t\(framework)\t\(entry.title)\t\(pids)\t\(path)")
     }
-} else if CommandLine.arguments.contains("--login-status") {
+}
+
+let arguments = CommandLine.arguments
+
+if arguments.contains("--list") {
+    printList()
+} else if arguments.contains("--login-status") {
     print(loginStatusText(SMAppService.mainApp.status))
-} else if CommandLine.arguments.contains("--enable-login") {
+} else if arguments.contains("--enable-login") {
     do {
         if SMAppService.mainApp.status != .enabled {
             try SMAppService.mainApp.register()
@@ -47,7 +51,7 @@ if CommandLine.arguments.contains("--list") {
         writeError("Failed to enable Open at Login: \(error.localizedDescription)")
         exit(1)
     }
-} else if CommandLine.arguments.contains("--disable-login") {
+} else if arguments.contains("--disable-login") {
     do {
         if SMAppService.mainApp.status == .enabled {
             try SMAppService.mainApp.unregister()
@@ -59,8 +63,8 @@ if CommandLine.arguments.contains("--list") {
         exit(1)
     }
 } else {
-    let app = NSApplication.shared
-    let delegate = PortManagerApp()
-    app.delegate = delegate
-    app.run()
+    let application = NSApplication.shared
+    let delegate = AppDelegate()
+    application.delegate = delegate
+    application.run()
 }

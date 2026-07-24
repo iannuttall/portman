@@ -1,0 +1,309 @@
+import AppKit
+import ServiceManagement
+import SwiftUI
+
+/// A real settings window, replacing the three raw text views the old build used
+/// for ignore rules.
+@MainActor
+final class SettingsWindow {
+    static let shared = SettingsWindow()
+
+    private var window: NSWindow?
+
+    func show(store: ServerStore) {
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+            return
+        }
+
+        let hosting = NSHostingController(rootView: SettingsView(store: store))
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Port Manager Settings"
+        window.styleMask = [.titled, .closable]
+        window.setContentSize(NSSize(width: 460, height: 400))
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
+    }
+}
+
+struct SettingsView: View {
+    @Bindable var store: ServerStore
+
+    var body: some View {
+        TabView {
+            GeneralSettings(store: store)
+                .tabItem { Label("General", systemImage: "gearshape") }
+
+            AppsSettings()
+                .tabItem { Label("Apps", systemImage: "app.badge") }
+
+            IgnoreSettings(store: store)
+                .tabItem { Label("Ignore Rules", systemImage: "eye.slash") }
+        }
+        .frame(width: 460, height: 400)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralSettings: View {
+    @Bindable var store: ServerStore
+
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var launchError: String?
+    @State private var refreshInterval = Preferences.refreshInterval
+    @State private var menuBarMode = Preferences.menuBarMode
+    @State private var healthProbeEnabled = Preferences.healthProbeEnabled
+    @State private var previewsEnabled = Preferences.previewsEnabled
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Open at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        setLaunchAtLogin(newValue)
+                    }
+
+                if let launchError {
+                    Text(launchError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("Menu bar", selection: $menuBarMode) {
+                    ForEach(MenuBarMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .onChange(of: menuBarMode) { _, newValue in
+                    Preferences.menuBarMode = newValue
+                }
+
+                Toggle("Show system ports", isOn: $store.showAllProcesses)
+            }
+
+            Section("Scanning") {
+                Picker("Refresh every", selection: $refreshInterval) {
+                    Text("5 seconds").tag(5.0)
+                    Text("15 seconds").tag(15.0)
+                    Text("30 seconds").tag(30.0)
+                    Text("1 minute").tag(60.0)
+                }
+                .onChange(of: refreshInterval) { _, newValue in
+                    Preferences.refreshInterval = newValue
+                }
+
+                Text("The panel refreshes faster while it's open.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Extras") {
+                Toggle("Check whether servers are responding", isOn: $healthProbeEnabled)
+                    .onChange(of: healthProbeEnabled) { _, newValue in
+                        Preferences.healthProbeEnabled = newValue
+                    }
+
+                Toggle("Show page previews", isOn: $previewsEnabled)
+                    .onChange(of: previewsEnabled) { _, newValue in
+                        Preferences.previewsEnabled = newValue
+                    }
+
+                Text("Previews render only for the row you expand.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            launchError = nil
+        } catch {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+            launchError = "Open at login needs Port Manager to be running from a signed app bundle in Applications."
+        }
+    }
+}
+
+// MARK: - Apps
+
+private struct AppsSettings: View {
+    @State private var terminal = Preferences.terminalBundleID
+    @State private var editor = Preferences.editorBundleID
+    @State private var browser = Preferences.browserBundleID
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Terminal", selection: $terminal) {
+                    ForEach(AppLauncher.installed(.terminal)) { app in
+                        Text(app.name).tag(Optional(app.id))
+                    }
+                }
+                .onChange(of: terminal) { _, newValue in Preferences.terminalBundleID = newValue }
+
+                Picker("Editor", selection: $editor) {
+                    ForEach(AppLauncher.installed(.editor)) { app in
+                        Text(app.name).tag(Optional(app.id))
+                    }
+                }
+                .onChange(of: editor) { _, newValue in Preferences.editorBundleID = newValue }
+
+                Picker("Browser", selection: $browser) {
+                    Text("System default").tag(String?.none)
+                    ForEach(AppLauncher.installed(.browser)) { app in
+                        Text(app.name).tag(Optional(app.id))
+                    }
+                }
+                .onChange(of: browser) { _, newValue in Preferences.browserBundleID = newValue }
+            } footer: {
+                Text("Only apps installed on this Mac are listed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Ignore rules
+
+private struct IgnoreSettings: View {
+    let store: ServerStore
+
+    @State private var ports = Preferences.ignoredPorts.sorted().map(String.init)
+    @State private var commands = Preferences.ignoredCommands.sorted()
+    @State private var targets = Preferences.ignoredTargets.sorted()
+    @State private var newRule = ""
+    @State private var ruleKind: RuleKind = .port
+
+    private enum RuleKind: String, CaseIterable {
+        case port = "Port"
+        case app = "App"
+        case project = "Project"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.comfy) {
+            HStack {
+                Picker("", selection: $ruleKind) {
+                    ForEach(RuleKind.allCases, id: \.self) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+
+                TextField(placeholder, text: $newRule)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(addRule)
+
+                Button("Add", action: addRule)
+                    .disabled(newRule.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            List {
+                ruleSection("Ports", items: ports) { remove($0, from: .port) }
+                ruleSection("Apps", items: commands) { remove($0, from: .app) }
+                ruleSection("Projects and containers", items: targets) { remove($0, from: .project) }
+            }
+            .listStyle(.inset)
+        }
+        .padding(Theme.Space.loose)
+    }
+
+    private var placeholder: String {
+        switch ruleKind {
+        case .port: return "3000"
+        case .app: return "ollama"
+        case .project: return "~/dev/old-project"
+        }
+    }
+
+    @ViewBuilder
+    private func ruleSection(
+        _ title: String,
+        items: [String],
+        remove: @escaping (String) -> Void
+    ) -> some View {
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items, id: \.self) { item in
+                    HStack {
+                        Text(item).font(.system(size: 12, design: .monospaced))
+                        Spacer()
+                        Button {
+                            remove(item)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func addRule() {
+        let value = newRule.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty else { return }
+
+        switch ruleKind {
+        case .port:
+            guard let port = Int(value) else { return }
+            var current = Preferences.ignoredPorts
+            current.insert(port)
+            Preferences.ignoredPorts = current
+            ports = current.sorted().map(String.init)
+        case .app:
+            var current = Preferences.ignoredCommands
+            current.insert(value.lowercased())
+            Preferences.ignoredCommands = current
+            commands = current.sorted()
+        case .project:
+            var current = Preferences.ignoredTargets
+            current.insert(value.lowercased())
+            Preferences.ignoredTargets = current
+            targets = current.sorted()
+        }
+
+        newRule = ""
+        store.refresh(force: true)
+    }
+
+    private func remove(_ value: String, from kind: RuleKind) {
+        switch kind {
+        case .port:
+            guard let port = Int(value) else { return }
+            var current = Preferences.ignoredPorts
+            current.remove(port)
+            Preferences.ignoredPorts = current
+            ports = current.sorted().map(String.init)
+        case .app:
+            var current = Preferences.ignoredCommands
+            current.remove(value)
+            Preferences.ignoredCommands = current
+            commands = current.sorted()
+        case .project:
+            var current = Preferences.ignoredTargets
+            current.remove(value)
+            Preferences.ignoredTargets = current
+            targets = current.sorted()
+        }
+
+        store.refresh(force: true)
+    }
+}
