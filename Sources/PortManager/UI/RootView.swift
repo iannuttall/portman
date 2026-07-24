@@ -105,7 +105,7 @@ struct RootView: View {
                     isActive: store.filter == filter,
                     count: count(for: filter)
                 ) {
-                    withAnimation(Theme.Motion.listUpdate) {
+                    withAnimation(store.animation(Theme.Motion.listUpdate)) {
                         store.filter = store.filter == filter && filter != .all ? .all : filter
                     }
                 }
@@ -213,7 +213,7 @@ struct RootView: View {
     }
 
     private func toggleSection(_ id: String) {
-        withAnimation(Theme.Motion.expand) {
+        withAnimation(store.animation(Theme.Motion.expand)) {
             if collapsedSections.contains(id) {
                 collapsedSections.remove(id)
             } else {

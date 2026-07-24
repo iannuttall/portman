@@ -107,9 +107,14 @@ struct ServerRowView: View {
         }
     }
 
+    /// Second line of a row.
+    ///
+    /// Every value that changes on a refresh — CPU, uptime — is monospaced-digit and
+    /// given a reserved width. Otherwise `0.0%` becoming `12.4%` reflows the whole
+    /// line every two seconds, which reads as the row twitching.
     private var metaLine: some View {
         HStack(spacing: Theme.Space.regular) {
-            if let branch = entry.git?.branch {
+            if store.showGitBranch, let branch = entry.git?.branch {
                 MetaLabel(
                     symbol: "arrow.triangle.branch",
                     text: dirtyBranchLabel(branch, git: entry.git)
@@ -117,22 +122,34 @@ struct ServerRowView: View {
                 .lineLimit(1)
             }
 
-            if let cpu = entry.metrics?.cpuPercent {
+            if store.showMetrics, let cpu = entry.metrics?.cpuPercent {
                 HStack(spacing: Theme.Space.tight) {
-                    MetaLabel(symbol: nil, text: Format.cpu(cpu), tint: cpu > 80 ? Theme.Colour.hung : nil)
+                    Text(verbatim: Format.cpu(cpu))
+                        .font(Theme.Typography.meta)
+                        .monospacedDigit()
+                        .foregroundStyle(cpu > 80 ? Theme.Colour.hung : Color.secondary)
+                        .frame(width: 38, alignment: .leading)
 
-                    let trace = store.cpuTrace(for: row.id)
-                    if trace.count > 2 {
-                        Sparkline(values: trace, tint: cpu > 80 ? Theme.Colour.hung : .secondary)
+                    if store.showSparklines {
+                        // Always occupies its slot, even before there's enough history
+                        // to draw, so the line doesn't jump when the trace appears.
+                        Sparkline(
+                            values: store.cpuTrace(for: row.id),
+                            tint: cpu > 80 ? Theme.Colour.hung : .secondary
+                        )
                     }
                 }
             }
 
-            if let uptime = entry.metrics?.uptime {
-                MetaLabel(symbol: nil, text: Format.uptime(uptime))
+            if store.showMetrics, let uptime = entry.metrics?.uptime {
+                Text(verbatim: Format.uptime(uptime))
+                    .font(Theme.Typography.meta)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 46, alignment: .leading)
             }
 
-            if let title = entry.health?.pageTitle, entry.git?.branch == nil {
+            if store.showPageTitles, let title = entry.health?.pageTitle, entry.git?.branch == nil {
                 Text("“\(title)”")
                     .font(Theme.Typography.meta)
                     .foregroundStyle(.tertiary)
@@ -149,6 +166,8 @@ struct ServerRowView: View {
                     .foregroundStyle(.tertiary)
                     .help(Exposure.network.label)
             }
+
+            Spacer(minLength: 0)
         }
         .lineLimit(1)
     }
@@ -183,7 +202,7 @@ struct ServerRowView: View {
     }
 
     private func killWithAnimation() {
-        withAnimation(Theme.Motion.kill) { isKilling = true }
+        withAnimation(store.animation(Theme.Motion.kill)) { isKilling = true }
 
         Task {
             try? await Task.sleep(for: .milliseconds(180))

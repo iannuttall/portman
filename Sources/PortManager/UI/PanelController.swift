@@ -49,9 +49,16 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard let button = statusItem.button else { return }
 
         let count = store.badgeCount
+
+        // isTemplate must be set on the image we actually hand to the button, and set
+        // last: a symbol-configured copy comes back with isTemplate cleared. Without
+        // it the symbol draws in its own colour — black — instead of following the
+        // menu bar, which is white in dark mode.
         let symbol = NSImage(
-            systemSymbolName: "network",
+            systemSymbolName: "rectangle.stack",
             accessibilityDescription: "Port Manager"
+        )?.withSymbolConfiguration(
+            NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
         )
         symbol?.isTemplate = true
 
@@ -68,8 +75,9 @@ final class PanelController: NSObject, NSWindowDelegate {
             button.title = "\(count)"
         }
 
-        // A wedged or orphaned server is the one thing worth colouring for.
-        button.contentTintColor = store.hasIssues ? .systemOrange : nil
+        // Left nil deliberately. Any explicit tint opts the button out of the
+        // automatic menu-bar adaptation, so the icon stops following light/dark.
+        button.contentTintColor = nil
     }
 
     /// `@Observable` doesn't emit notifications, so re-register after each read.

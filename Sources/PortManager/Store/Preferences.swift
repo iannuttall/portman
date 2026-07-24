@@ -24,6 +24,11 @@ enum Preferences {
         static let menuBarMode = "menuBarMode"
         static let healthProbeEnabled = "healthProbeEnabled"
         static let previewsEnabled = "previewsEnabled"
+        static let showSparklines = "showSparklines"
+        static let showGitBranch = "showGitBranch"
+        static let showMetrics = "showMetrics"
+        static let showPageTitles = "showPageTitles"
+        static let reduceMotion = "reduceMotion"
     }
 
     // MARK: Visibility
@@ -73,6 +78,35 @@ enum Preferences {
     static var previewsEnabled: Bool {
         get { defaults.object(forKey: Key.previewsEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.previewsEnabled) }
+    }
+
+    // MARK: Row content
+
+    static var showMetrics: Bool {
+        get { defaults.object(forKey: Key.showMetrics) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showMetrics) }
+    }
+
+    static var showSparklines: Bool {
+        get { defaults.object(forKey: Key.showSparklines) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showSparklines) }
+    }
+
+    static var showGitBranch: Bool {
+        get { defaults.object(forKey: Key.showGitBranch) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showGitBranch) }
+    }
+
+    static var showPageTitles: Bool {
+        get { defaults.object(forKey: Key.showPageTitles) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showPageTitles) }
+    }
+
+    /// Turns off list animations. The list still updates — it just doesn't move
+    /// while you're reading it.
+    static var reduceMotion: Bool {
+        get { defaults.object(forKey: Key.reduceMotion) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: Key.reduceMotion) }
     }
 
     // MARK: External apps

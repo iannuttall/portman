@@ -58,8 +58,15 @@ struct DetailCard: View {
 
     // MARK: Preview
 
+    /// Decided from the kind of server, not from the health result.
+    ///
+    /// Gating on `health == .healthy` meant the preview slot appeared a second after
+    /// the card opened, shoving everything below it down. Reserving the space up front
+    /// for anything that could serve HTTP keeps the card still.
     private var shouldShowPreview: Bool {
-        Preferences.previewsEnabled && entry.health?.state == .healthy
+        guard store.previewsEnabled else { return false }
+        guard entry.kind != .database, entry.kind != .system else { return false }
+        return entry.health?.state != .nonHTTP
     }
 
     private var previewSection: some View {
@@ -72,6 +79,9 @@ struct DetailCard: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.thumbnail))
+                    // Cross-fades in place instead of snapping, and the slot is already
+                    // reserved, so nothing below it moves.
+                    .transition(.opacity)
             } else if isLoadingPreview {
                 ProgressView().controlSize(.small)
             } else {
@@ -104,7 +114,15 @@ struct DetailCard: View {
 
         isLoadingPreview = true
         defer { isLoadingPreview = false }
-        preview = await PreviewSnapshotter.shared.snapshot(port: entry.port, force: force)
+
+        let image = await PreviewSnapshotter.shared.snapshot(port: entry.port, force: force)
+
+        // Keep the old thumbnail on a failed refresh rather than blanking the slot.
+        guard let image else { return }
+
+        withAnimation(store.animation(.easeOut(duration: 0.2))) {
+            preview = image
+        }
     }
 
     // MARK: Rows

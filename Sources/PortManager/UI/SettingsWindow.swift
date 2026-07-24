@@ -39,6 +39,9 @@ struct SettingsView: View {
             GeneralSettings(store: store)
                 .tabItem { Label("General", systemImage: "gearshape") }
 
+            DisplaySettings(store: store)
+                .tabItem { Label("Display", systemImage: "slider.horizontal.3") }
+
             AppsSettings()
                 .tabItem { Label("Apps", systemImage: "app.badge") }
 
@@ -58,8 +61,6 @@ private struct GeneralSettings: View {
     @State private var launchError: String?
     @State private var refreshInterval = Preferences.refreshInterval
     @State private var menuBarMode = Preferences.menuBarMode
-    @State private var healthProbeEnabled = Preferences.healthProbeEnabled
-    @State private var previewsEnabled = Preferences.previewsEnabled
 
     var body: some View {
         Form {
@@ -103,21 +104,6 @@ private struct GeneralSettings: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Extras") {
-                Toggle("Check whether servers are responding", isOn: $healthProbeEnabled)
-                    .onChange(of: healthProbeEnabled) { _, newValue in
-                        Preferences.healthProbeEnabled = newValue
-                    }
-
-                Toggle("Show page previews", isOn: $previewsEnabled)
-                    .onChange(of: previewsEnabled) { _, newValue in
-                        Preferences.previewsEnabled = newValue
-                    }
-
-                Text("Previews render only for the row you expand.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
     }
@@ -134,6 +120,52 @@ private struct GeneralSettings: View {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             launchError = "Open at login needs Port Manager to be running from a signed app bundle in Applications."
         }
+    }
+}
+
+// MARK: - Display
+
+/// Everything that can be turned off, in one place. Rows carry a lot of live data,
+/// and not everyone wants all of it moving on every refresh.
+private struct DisplaySettings: View {
+    @Bindable var store: ServerStore
+
+    var body: some View {
+        Form {
+            Section("In each row") {
+                Toggle("CPU and uptime", isOn: $store.showMetrics)
+                Toggle("CPU history graph", isOn: $store.showSparklines)
+                    .disabled(!store.showMetrics)
+                Toggle("Git branch", isOn: $store.showGitBranch)
+                Toggle("Page title", isOn: $store.showPageTitles)
+                    .disabled(!store.healthProbeEnabled)
+            }
+
+            Section("When a row is expanded") {
+                Toggle("Page preview", isOn: $store.previewsEnabled)
+
+                Text("Previews render only for the row you expand, and only when you open it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Motion") {
+                Toggle("Reduce motion", isOn: $store.reduceMotion)
+
+                Text("Stops the list animating when servers come and go. Values still update in place.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Checks") {
+                Toggle("Check whether servers are responding", isOn: $store.healthProbeEnabled)
+
+                Text("Adds the status code, response time, page title, and detects servers that hold a port without answering.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

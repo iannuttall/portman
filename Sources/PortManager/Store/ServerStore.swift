@@ -44,6 +44,42 @@ final class ServerStore {
         }
     }
 
+    // Display preferences live here rather than being read from UserDefaults inside
+    // view bodies, so toggling one updates the panel immediately.
+
+    var showMetrics: Bool = Preferences.showMetrics {
+        didSet { Preferences.showMetrics = showMetrics }
+    }
+
+    var showSparklines: Bool = Preferences.showSparklines {
+        didSet { Preferences.showSparklines = showSparklines }
+    }
+
+    var showGitBranch: Bool = Preferences.showGitBranch {
+        didSet { Preferences.showGitBranch = showGitBranch }
+    }
+
+    var showPageTitles: Bool = Preferences.showPageTitles {
+        didSet { Preferences.showPageTitles = showPageTitles }
+    }
+
+    var previewsEnabled: Bool = Preferences.previewsEnabled {
+        didSet { Preferences.previewsEnabled = previewsEnabled }
+    }
+
+    var healthProbeEnabled: Bool = Preferences.healthProbeEnabled {
+        didSet { Preferences.healthProbeEnabled = healthProbeEnabled }
+    }
+
+    var reduceMotion: Bool = Preferences.reduceMotion {
+        didSet { Preferences.reduceMotion = reduceMotion }
+    }
+
+    /// nil disables the animation entirely.
+    func animation(_ base: Animation) -> Animation? {
+        reduceMotion ? nil : base
+    }
+
     var selectedRowID: String?
     var expandedRowID: String?
 
@@ -269,7 +305,7 @@ final class ServerStore {
 
         // Health probes run after the list is on screen — a wedged server takes
         // the full timeout to detect, and the list must not wait for it.
-        if Preferences.healthProbeEnabled {
+        if healthProbeEnabled {
             await probeHealth(for: enriched)
         }
     }
@@ -328,7 +364,16 @@ final class ServerStore {
     private func commit(_ updated: [ServerEntry]) {
         recordCPU(updated)
 
-        withAnimation(Theme.Motion.listUpdate) {
+        // Only animate when the list actually changes shape. A refresh that just
+        // moved a CPU reading must not animate — the panel polls every 2s while
+        // open, and animating those made the whole list shimmer while reading it.
+        let structureChanged = updated.map(\.id) != entries.map(\.id)
+
+        if structureChanged && !Preferences.reduceMotion {
+            withAnimation(Theme.Motion.listUpdate) {
+                entries = updated
+            }
+        } else {
             entries = updated
         }
 
@@ -370,7 +415,7 @@ final class ServerStore {
     }
 
     func toggleExpanded(_ id: String) {
-        withAnimation(Theme.Motion.expand) {
+        withAnimation(animation(Theme.Motion.expand)) {
             expandedRowID = expandedRowID == id ? nil : id
         }
     }
@@ -485,7 +530,7 @@ final class ServerStore {
             recentlyKilled[port] = now
         }
 
-        withAnimation(Theme.Motion.kill) {
+        withAnimation(animation(Theme.Motion.kill)) {
             // Recomputing derived state is enough — visibleEntries filters these out.
             entries = entries
         }
@@ -541,7 +586,7 @@ final class ServerStore {
         }
 
         Preferences.pinnedKeys = keys
-        withAnimation(Theme.Motion.listUpdate) { entries = entries }
+        withAnimation(animation(Theme.Motion.listUpdate)) { entries = entries }
     }
 
     func ignorePort(_ entry: ServerEntry) {
@@ -567,7 +612,7 @@ final class ServerStore {
     }
 
     private func refreshDerived() {
-        withAnimation(Theme.Motion.listUpdate) { entries = entries }
+        withAnimation(animation(Theme.Motion.listUpdate)) { entries = entries }
     }
 }
 
