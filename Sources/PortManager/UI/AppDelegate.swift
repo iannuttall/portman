@@ -15,6 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Lets a screenshot or a UI check drive the panel without a real click.
         // "expand" also opens the first row, so the detail card can be inspected.
         let debugOpen = ProcessInfo.processInfo.environment["PORTMANAGER_OPEN_ON_LAUNCH"]
+
+        if debugOpen == "settings" {
+            SettingsWindow.shared.show(store: store)
+            return
+        }
+
         if debugOpen == "1" || debugOpen == "expand" {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(600))

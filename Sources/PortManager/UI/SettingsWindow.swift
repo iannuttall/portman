@@ -21,7 +21,7 @@ final class SettingsWindow {
         let window = NSWindow(contentViewController: hosting)
         window.title = "Port Manager Settings"
         window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 460, height: 400))
+        window.setContentSize(NSSize(width: 480, height: 520))
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -45,7 +45,7 @@ struct SettingsView: View {
             IgnoreSettings(store: store)
                 .tabItem { Label("Ignore Rules", systemImage: "eye.slash") }
         }
-        .frame(width: 460, height: 400)
+        .frame(width: 480, height: 520)
     }
 }
 
