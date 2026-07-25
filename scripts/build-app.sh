@@ -146,6 +146,36 @@ $ICON_ENTRY
 </plist>
 PLIST
 
+# actool's .icns stops at 256, so anything larger on macOS 15 and earlier gets
+# upscaled from that and looks soft. The system can render the vector layers in
+# Assets.car at any size, so the big renditions are taken from the built bundle and
+# merged back in. Needs the bundle to exist, hence its position here.
+if [ -f "$RESOURCES_DIR/AppIcon.icns" ] && [ -f "$RESOURCES_DIR/Assets.car" ]; then
+  RENDER_TOOL="$ROOT/.build/icon/render-icon"
+
+  if [ ! -x "$RENDER_TOOL" ] || [ "$ROOT/scripts/icon/render-icon.swift" -nt "$RENDER_TOOL" ]; then
+    mkdir -p "$ROOT/.build/icon"
+    swiftc -swift-version 6 -O "$ROOT/scripts/icon/render-icon.swift" -o "$RENDER_TOOL" 2>/dev/null || true
+  fi
+
+  if [ -x "$RENDER_TOOL" ]; then
+    # A fresh temp dir each time: iconutil wants the target not to exist, and this
+    # avoids deleting anything.
+    ICON_WORK="$(mktemp -d)"
+    ICONSET="$ICON_WORK/AppIcon.iconset"
+
+    if iconutil -c iconset "$RESOURCES_DIR/AppIcon.icns" -o "$ICONSET" 2>/dev/null; then
+      "$RENDER_TOOL" "$APP_DIR" 256 "$ICONSET/icon_256x256.png" >/dev/null 2>&1 || true
+      "$RENDER_TOOL" "$APP_DIR" 512 "$ICONSET/icon_512x512.png" >/dev/null 2>&1 || true
+      "$RENDER_TOOL" "$APP_DIR" 1024 "$ICONSET/icon_512x512@2x.png" >/dev/null 2>&1 || true
+
+      if iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null; then
+        echo "  icon: added 256, 512 and 1024 renditions for older macOS"
+      fi
+    fi
+  fi
+fi
+
 # The app signs last, once everything nested inside it is already signed.
 sign "$APP_DIR"
 
