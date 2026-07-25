@@ -59,13 +59,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         // last: a symbol-configured copy comes back with isTemplate cleared. Without
         // it the symbol draws in its own colour — black — instead of following the
         // menu bar, which is white in dark mode.
-        let symbol = NSImage(
-            systemSymbolName: "rectangle.stack",
-            accessibilityDescription: AppInfo.displayName
-        )?.withSymbolConfiguration(
-            NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        )
-        symbol?.isTemplate = true
+        let symbol = Self.statusItemSymbol()
 
         switch Preferences.menuBarMode {
         case .iconOnly:
@@ -83,6 +77,33 @@ final class PanelController: NSObject, NSWindowDelegate {
         // Left nil deliberately. Any explicit tint opts the button out of the
         // automatic menu-bar adaptation, so the icon stops following light/dark.
         button.contentTintColor = nil
+    }
+
+    /// A plug, matching the app icon.
+    ///
+    /// The portrait variant is the narrowest of the plug symbols, which matters — the
+    /// menu bar runs out of room and macOS silently hides whatever no longer fits.
+    /// Filled rather than outline: at 16px an outline plug reads as a smudge.
+    ///
+    /// `isTemplate` is set on the configured copy, and last: `withSymbolConfiguration`
+    /// returns a new image with the flag cleared, and a non-template image draws in its
+    /// own colour instead of following the menu bar.
+    private static func statusItemSymbol() -> NSImage? {
+        let names = ["powerplug.portrait.fill", "powerplug.fill", "powerplug", "rectangle.stack"]
+
+        for name in names {
+            guard let base = NSImage(systemSymbolName: name, accessibilityDescription: AppInfo.displayName) else {
+                continue
+            }
+
+            let symbol = base.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+            ) ?? base
+            symbol.isTemplate = true
+            return symbol
+        }
+
+        return nil
     }
 
     /// `@Observable` doesn't emit notifications, so re-register after each read.
