@@ -37,12 +37,28 @@ APP_NAME="$APP_NAME" VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" \
 
 echo "==> Verifying signature"
 codesign --verify --deep --strict --verbose=1 "$APP_DIR"
-# Catches the hardened-runtime and library-validation problems that only show up
-# at launch, before we spend minutes waiting on the notary.
-spctl --assess --type execute --verbose=2 "$APP_DIR" || {
-  echo "error: Gatekeeper assessment failed — notarization would be rejected" >&2
+
+# Notarization rejects anything without the hardened runtime, so assert the flag is
+# actually set rather than finding out after a round trip to Apple.
+#
+# Deliberately NOT spctl --assess here: an app that is signed but not yet notarized
+# always reports "rejected / source=Unnotarized Developer ID", so gating on it would
+# abort every release before it could be notarized. That check belongs after stapling.
+if ! codesign -d --verbose=2 "$APP_DIR" 2>&1 | grep -q "flags=.*runtime"; then
+  echo "error: hardened runtime is not set — notarization would be rejected" >&2
   exit 1
-}
+fi
+
+# The app has to actually launch. Library validation failures are invisible to
+# codesign and only surface when dyld refuses to map the framework.
+"$APP_DIR/Contents/MacOS/$APP_NAME" & LAUNCH_PID=$!
+sleep 5
+if kill -0 $LAUNCH_PID 2>/dev/null; then
+  kill $LAUNCH_PID
+else
+  echo "error: the app exited on launch — check framework signing and rpath" >&2
+  exit 1
+fi
 
 echo "==> Building DMG"
 # SKIP_BUILD: the app is already built and signed above; rebuilding
@@ -60,6 +76,11 @@ else
   echo "==> Stapling"
   xcrun stapler staple "$DMG_PATH"
   xcrun stapler validate "$DMG_PATH"
+
+  # Now it should pass, and this is the check that actually reflects what a user
+  # downloading the DMG will experience.
+  echo "==> Gatekeeper assessment"
+  spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH"
 fi
 
 echo "==> Signing the update for Sparkle"
