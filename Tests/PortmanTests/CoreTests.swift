@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import PortManager
+@testable import Portman
 
 // MARK: - lsof parsing
 

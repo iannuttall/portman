@@ -526,7 +526,7 @@ private enum SocketExchange {
     }
 
     private static let queue = DispatchQueue(
-        label: "app.local.portmanager.health-socket",
+        label: "\(AppInfo.bundleID).health-socket",
         attributes: .concurrent
     )
 

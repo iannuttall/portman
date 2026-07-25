@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Everything identity-related is a variable: the app is likely to be renamed, and
 # will be signed by a different account than the one it was developed on.
-APP_NAME="${APP_NAME:-Port Manager}"
-BUNDLE_ID="${BUNDLE_ID:-app.local.portmanager}"
+APP_NAME="${APP_NAME:-portman}"
+BUNDLE_ID="${BUNDLE_ID:-app.portman}"
 VERSION="${VERSION:-0.2.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-2}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -29,7 +29,7 @@ swift build -c release
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
-cp "$BUILD_DIR/PortManager" "$MACOS_DIR/$APP_NAME"
+cp "$BUILD_DIR/portman" "$MACOS_DIR/$APP_NAME"
 
 # Sparkle ships as a framework, so it has to be embedded and the binary told to
 # look for it inside the bundle. SwiftPM links it but doesn't build app bundles.

@@ -46,7 +46,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         button.target = self
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.toolTip = "Port Manager"
+        button.toolTip = AppInfo.displayName
         updateStatusItem()
     }
 
@@ -61,7 +61,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         // menu bar, which is white in dark mode.
         let symbol = NSImage(
             systemSymbolName: "rectangle.stack",
-            accessibilityDescription: "Port Manager"
+            accessibilityDescription: AppInfo.displayName
         )?.withSymbolConfiguration(
             NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
         )
@@ -365,7 +365,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "r")
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Port Manager", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(quit), keyEquivalent: "q")
 
         for item in menu.items {
             item.target = self

@@ -26,7 +26,7 @@ final class SettingsWindow {
 
         let hosting = NSHostingController(rootView: SettingsView(store: store))
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Port Manager Settings"
+        window.title = "\(AppInfo.displayName) Settings"
         window.styleMask = [.titled, .closable]
         window.setContentSize(NSSize(width: 480, height: 520))
         window.isReleasedWhenClosed = false
@@ -150,7 +150,7 @@ private struct GeneralSettings: View {
             launchError = nil
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            launchError = "Open at login needs Port Manager to be running from a signed app bundle in Applications."
+            launchError = "Open at login needs \(AppInfo.displayName) to be running from a signed app bundle in Applications."
         }
     }
 }
@@ -285,7 +285,7 @@ private struct AppsSettings: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text("Sharing opens a Cloudflare quick tunnel. The link is public, unauthenticated and temporary — it closes when you stop it, quit, or restart Port Manager, and you get a new address next time.")
+                Text("Sharing opens a Cloudflare quick tunnel. The link is public, unauthenticated and temporary — it closes when you stop it, quit, or restart the app, and you get a new address next time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

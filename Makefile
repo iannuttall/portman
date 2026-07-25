@@ -10,7 +10,7 @@ install publish-local update-local:
 	./scripts/install-local.sh
 
 run:
-	swift run PortManager
+	swift run portman
 
 list:
-	swift run PortManager --list
+	swift run portman --list

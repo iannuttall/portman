@@ -138,7 +138,7 @@ struct RootView: View {
             }
             .keyboardShortcut(",")
 
-            Button("Quit Port Manager") { NSApplication.shared.terminate(nil) }
+            Button("Quit \(AppInfo.displayName)") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         } label: {
             Image(systemName: "ellipsis.circle")

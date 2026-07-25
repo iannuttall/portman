@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Port Manager"
+APP_NAME="${APP_NAME:-portman}"
 SOURCE_APP="$ROOT/dist/$APP_NAME.app"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/Applications}"
 INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"

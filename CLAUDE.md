@@ -1,4 +1,4 @@
-# Port Manager — working notes
+# portman — working notes
 
 A macOS menu bar app that lists everything listening locally, identifies what it is,
 and lets you act on it. Swift 6, SwiftUI in an AppKit panel, SPM only — no Xcode project.
@@ -7,10 +7,10 @@ and lets you act on it. Swift 6, SwiftUI in an AppKit panel, SPM only — no Xco
 
 ```sh
 swift build                     # build
-swift run PortManager           # run from source (no bundle: previews and login items won't work)
-swift run PortManager --list    # scan and print as TSV — fastest way to check detection
+swift run portman           # run from source (no bundle: previews and login items won't work)
+swift run portman --list    # scan and print as TSV — fastest way to check detection
 swift test                      # 45 tests over the pure logic
-make build                      # build dist/Port Manager.app
+make build                      # build dist/portman.app
 make publish-local              # build, sign, install to ~/Applications, relaunch
 make dmg                        # drag-install DMG
 ```
@@ -119,5 +119,5 @@ nil-safe metric sorting, sibling-port folding, conflict detection, classificatio
 exposure, ancestry trust, tunnel URL extraction. UI is untested.
 
 For anything involving live processes, verify against real state rather than assuming.
-`PORTMANAGER_OPEN_ON_LAUNCH=1|expand|settings` drives the panel on launch for
+`PORTMAN_OPEN_ON_LAUNCH=1|expand|settings` drives the panel on launch for
 screenshots and UI checks.

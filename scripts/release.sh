@@ -20,7 +20,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="${APP_NAME:-Port Manager}"
+APP_NAME="${APP_NAME:-portman}"
 VERSION="${VERSION:?set VERSION, e.g. VERSION=0.3.0}"
 BUILD_NUMBER="${BUILD_NUMBER:?set BUILD_NUMBER, e.g. BUILD_NUMBER=3}"
 SIGN_IDENTITY="${SIGN_IDENTITY:?set SIGN_IDENTITY to a Developer ID Application identity}"

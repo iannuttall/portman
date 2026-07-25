@@ -48,7 +48,7 @@ final class PreviewSnapshotter {
             .userDomainMask,
             true
         ).first ?? NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("app.local.portmanager/previews", isDirectory: true)
+            .appendingPathComponent("\(AppInfo.cacheNamespace)/previews", isDirectory: true)
 
         try? FileManager.default.createDirectory(
             at: directory,

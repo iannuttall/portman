@@ -3,28 +3,28 @@
 import PackageDescription
 
 let package = Package(
-    name: "PortManager",
+    name: "portman",
     platforms: [
         .macOS(.v15)
     ],
     products: [
-        .executable(name: "PortManager", targets: ["PortManager"])
+        .executable(name: "portman", targets: ["Portman"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
         .executableTarget(
-            name: "PortManager",
+            name: "Portman",
             dependencies: [
                 .product(name: "Sparkle", package: "Sparkle")
             ],
-            path: "Sources/PortManager"
+            path: "Sources/Portman"
         ),
         .testTarget(
-            name: "PortManagerTests",
-            dependencies: ["PortManager"],
-            path: "Tests/PortManagerTests"
+            name: "PortmanTests",
+            dependencies: ["Portman"],
+            path: "Tests/PortmanTests"
         )
     ]
 )

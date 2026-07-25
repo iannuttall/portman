@@ -1,4 +1,4 @@
-# Port Manager
+# portman
 
 A macOS menu bar app for everything listening on your Mac — what it is, which project it belongs to,
 how hard it's working, and whether it's actually alive.
@@ -13,7 +13,7 @@ path, the git branch, and the page title of whatever it's serving. Frameworks ar
 Vite, Remix, SvelteKit, Nuxt, Angular, Expo, Rails, Django, FastAPI and more.
 
 **It catches wedged servers.** A dev server that's holding its port but no longer answering looks
-identical to a healthy one in every other tool. Port Manager probes each port and flags it:
+identical to a healthy one in every other tool. portman probes each port and flags it:
 `not responding · alive but hung`.
 
 **It shows you the page.** Expand a row and you get a live thumbnail of `localhost:<port>`, so you
@@ -77,7 +77,7 @@ anything to `allowedHosts`. If your app needs to see the real public hostname, t
 that off in Settings → Apps.
 
 **Shared links are deliberately temporary.** A tunnel closes when you stop it, quit, or
-restart Port Manager, and you get a new address next time. Port Manager also kills any
+restart portman, and you get a new address next time. portman also kills any
 tunnel left behind by a previous session at launch, so a public URL can never outlive
 the app that opened it.
 
@@ -111,7 +111,7 @@ up. Every tool in this category ships outside the store for the same reason.
 ```sh
 VERSION=0.3.0 BUILD_NUMBER=3 \
   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-  NOTARY_PROFILE=portmanager \
+  NOTARY_PROFILE=portman \
   SPARKLE_FEED_URL=https://example.com/appcast.xml \
   SPARKLE_PUBLIC_KEY=your-ed-public-key \
   ./scripts/release.sh
@@ -159,8 +159,8 @@ Requires macOS 15 or later.
 ## Development
 
 ```sh
-swift run PortManager          # run from source
-swift run PortManager --list   # scan and print as TSV, no UI
+swift run portman          # run from source
+swift run portman --list   # scan and print as TSV, no UI
 swift test                     # parsing, search, sorting, folding, classification
 make build                     # build the .app bundle into dist/
 ```

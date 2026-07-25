@@ -40,7 +40,7 @@ jobs:
 
       - name: Verify the bundle launches
         run: |
-          "dist/Port Manager.app/Contents/MacOS/Port Manager" & PID=$!
+          "dist/portman.app/Contents/MacOS/portman" & PID=$!
           sleep 6
           if kill -0 $PID 2>/dev/null; then
             echo "launched and stayed up"
@@ -51,7 +51,7 @@ jobs:
           fi
 
       - name: Verify signature
-        run: codesign --verify --deep --strict --verbose=1 "dist/Port Manager.app"
+        run: codesign --verify --deep --strict --verbose=1 "dist/portman.app"
 
       - name: Scan detection without the UI
-        run: swift run PortManager --list | head -20
+        run: swift run portman --list | head -20

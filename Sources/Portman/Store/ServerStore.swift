@@ -797,7 +797,7 @@ enum SnapshotCache {
             return nil
         }
 
-        let directory = base.appendingPathComponent("app.local.portmanager", isDirectory: true)
+        let directory = base.appendingPathComponent(AppInfo.cacheNamespace, isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("snapshot.json")
     }
