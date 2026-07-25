@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Port Manager</title>
+    <description>Updates for Port Manager</description>
+    <language>en</language>
+
+    <!--
+      Sparkle reads this file to find updates. Host it at the URL you pass as
+      SPARKLE_FEED_URL, and add one <item> per release — scripts/release.sh prints
+      a ready-made block with the correct length and signature.
+
+      No <item> entries means no updates are available, which is the correct state
+      before the first release.
+    -->
+
+  </channel>
+</rss>

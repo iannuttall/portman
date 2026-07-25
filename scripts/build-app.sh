@@ -2,23 +2,78 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Port Manager"
+
+# Everything identity-related is a variable: the app is likely to be renamed, and
+# will be signed by a different account than the one it was developed on.
+APP_NAME="${APP_NAME:-Port Manager}"
+BUNDLE_ID="${BUNDLE_ID:-app.local.portmanager}"
+VERSION="${VERSION:-0.2.0}"
+BUILD_NUMBER="${BUILD_NUMBER:-2}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+
+# Sparkle stays dormant unless both of these are set. The app checks for the
+# REPLACE_ prefix and disables its updater entirely when it sees one.
+SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-REPLACE_WITH_APPCAST_URL}"
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-REPLACE_WITH_PUBLIC_ED_KEY}"
+
 BUILD_DIR="$ROOT/.build/release"
 APP_DIR="$ROOT/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
 cd "$ROOT"
 swift build -c release
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
-cp "$BUILD_DIR/PortManager" "$MACOS_DIR/Port Manager"
+cp "$BUILD_DIR/PortManager" "$MACOS_DIR/$APP_NAME"
 
-cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
+# Sparkle ships as a framework, so it has to be embedded and the binary told to
+# look for it inside the bundle. SwiftPM links it but doesn't build app bundles.
+SPARKLE_FRAMEWORK="$(find "$ROOT/.build/artifacts" -name "Sparkle.framework" -type d -path "*macos*" | head -1)"
+
+# Hardened runtime enforces library validation, which requires every loaded
+# framework to share the app's Team ID. Ad-hoc signatures have no Team ID, so
+# enabling it on a local build makes the app refuse to load Sparkle at all. It's
+# only needed for notarization, which requires a real identity anyway.
+SIGN_FLAGS=(--force)
+if [ "$SIGN_IDENTITY" != "-" ]; then
+  SIGN_FLAGS+=(--options runtime --timestamp)
+fi
+
+sign () {
+  codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$1"
+}
+
+if [ -n "$SPARKLE_FRAMEWORK" ]; then
+  cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$APP_NAME"
+
+  # Signed innermost first: the XPC services and helpers are code in their own
+  # right, and signing the framework before them invalidates its seal.
+  SPARKLE_VERSION_DIR="$FRAMEWORKS_DIR/Sparkle.framework/Versions/B"
+  for xpc in "$SPARKLE_VERSION_DIR/XPCServices/"*.xpc; do
+    [ -e "$xpc" ] && sign "$xpc"
+  done
+  [ -e "$SPARKLE_VERSION_DIR/Updater.app" ] && sign "$SPARKLE_VERSION_DIR/Updater.app"
+  [ -e "$SPARKLE_VERSION_DIR/Autoupdate" ] && sign "$SPARKLE_VERSION_DIR/Autoupdate"
+  sign "$FRAMEWORKS_DIR/Sparkle.framework"
+else
+  echo "warning: Sparkle.framework not found — the build will have no updater" >&2
+fi
+
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+  cp "$ROOT/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+  ICON_ENTRY="  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>"
+else
+  ICON_ENTRY=""
+fi
+
+cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -26,19 +81,20 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>Port Manager</string>
+  <string>$APP_NAME</string>
   <key>CFBundleIdentifier</key>
-  <string>app.local.portmanager</string>
+  <string>$BUNDLE_ID</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Port Manager</string>
+  <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.2.0</string>
+  <string>$VERSION</string>
   <key>CFBundleVersion</key>
-  <string>2</string>
+  <string>$BUILD_NUMBER</string>
+$ICON_ENTRY
   <key>LSMinimumSystemVersion</key>
   <string>15.0</string>
   <key>LSUIElement</key>
@@ -46,16 +102,32 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Port Manager uses automation to focus the terminal tab a dev server is running in, and to restart dev servers in your terminal.</string>
+  <string>$APP_NAME uses automation to focus the terminal tab a dev server is running in, and to restart dev servers in your terminal.</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key>
     <true/>
   </dict>
+  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUScheduledCheckInterval</key>
+  <integer>86400</integer>
 </dict>
 </plist>
 PLIST
 
-codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR"
+# The app signs last, once everything nested inside it is already signed.
+sign "$APP_DIR"
 
 echo "Built $APP_DIR"
+echo "  version $VERSION ($BUILD_NUMBER), bundle $BUNDLE_ID, signed by ${SIGN_IDENTITY}"
+
+if [ "$SPARKLE_FEED_URL" = "REPLACE_WITH_APPCAST_URL" ]; then
+  echo "  updates: disabled (set SPARKLE_FEED_URL and SPARKLE_PUBLIC_KEY to enable)"
+else
+  echo "  updates: $SPARKLE_FEED_URL"
+fi

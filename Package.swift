@@ -10,9 +10,15 @@ let package = Package(
     products: [
         .executable(name: "PortManager", targets: ["PortManager"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+    ],
     targets: [
         .executableTarget(
             name: "PortManager",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/PortManager"
         ),
         .testTarget(

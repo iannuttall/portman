@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # The app targets macOS 15 and uses libproc, so this can't run on Linux.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: swift test
+
+      # Proves the bundle still assembles and that Sparkle embeds and loads —
+      # library validation problems only surface at launch, not at build time.
+      - name: Build app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Verify the bundle launches
+        run: |
+          "dist/Port Manager.app/Contents/MacOS/Port Manager" & PID=$!
+          sleep 6
+          if kill -0 $PID 2>/dev/null; then
+            echo "launched and stayed up"
+            kill $PID
+          else
+            echo "::error::the app exited on launch — check dynamic linking"
+            exit 1
+          fi
+
+      - name: Verify signature
+        run: codesign --verify --deep --strict --verbose=1 "dist/Port Manager.app"
+
+      - name: Scan detection without the UI
+        run: swift run PortManager --list | head -20

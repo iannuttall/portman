@@ -124,6 +124,13 @@ struct RootView: View {
 
             Divider()
 
+            if UpdateController.shared.isConfigured {
+                Button("Check for Updates…") {
+                    UpdateController.shared.checkForUpdates()
+                }
+                .disabled(!UpdateController.shared.canCheckForUpdates)
+            }
+
             Button("Settings…") {
                 // The panel outranks every ordinary window, so it has to go first.
                 dismiss()

@@ -106,6 +106,31 @@ out to `docker`, `git` and `cloudflared`, and read project directories it was ne
 granted. The App Sandbox forbids essentially all of it, and there's no entitlement that opens it
 up. Every tool in this category ships outside the store for the same reason.
 
+## Releasing
+
+```sh
+VERSION=0.3.0 BUILD_NUMBER=3 \
+  SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  NOTARY_PROFILE=portmanager \
+  SPARKLE_FEED_URL=https://example.com/appcast.xml \
+  SPARKLE_PUBLIC_KEY=your-ed-public-key \
+  ./scripts/release.sh
+```
+
+Builds, signs, notarizes, staples, and prints the `<item>` block to paste into
+`appcast.xml`. Store notary credentials once with
+`xcrun notarytool store-credentials`.
+
+Updates use [Sparkle](https://sparkle-project.org). Generate the signing key pair once
+with Sparkle's `generate_keys` — the private key lives in your keychain and must never be
+committed; only the public key goes into the build. A build without `SPARKLE_FEED_URL`
+and `SPARKLE_PUBLIC_KEY` simply has no updater rather than a broken one, so local builds
+need neither.
+
+The app name, bundle identifier and signing identity are all build variables
+(`APP_NAME`, `BUNDLE_ID`, `SIGN_IDENTITY`), so renaming the app or moving it to a
+different developer account doesn't require touching the source.
+
 ## Install
 
 ```sh
