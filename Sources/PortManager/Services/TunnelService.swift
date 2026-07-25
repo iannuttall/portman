@@ -86,6 +86,56 @@ actor TunnelService {
         return arguments
     }
 
+    /// Waits until the tunnel hostname is actually resolvable in public DNS.
+    ///
+    /// cloudflared prints the URL the moment the tunnel registers, seconds before the
+    /// hostname is published. Opening it in that window gets NXDOMAIN — which macOS
+    /// then caches, so the link keeps failing in the browser long after the tunnel is
+    /// fine, while `dig` says it resolves.
+    ///
+    /// The lookup goes to 1.1.1.1 through `dig` on purpose: asking the system resolver
+    /// would cache the very negative answer we're trying to avoid.
+    static func waitUntilResolvable(host: String, timeout: TimeInterval = 20) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if resolves(host: host) { return true }
+            try? await Task.sleep(for: .milliseconds(700))
+        }
+
+        return false
+    }
+
+    private static func resolves(host: String) -> Bool {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/dig") else {
+            return true
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/dig")
+        process.arguments = ["+short", "+time=2", "+tries=1", "@1.1.1.1", host]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return true
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return output.contains(".") || output.contains(":")
+    }
+
+    static func hostname(from url: String) -> String? {
+        URL(string: url)?.host
+    }
+
     // MARK: - Lifecycle
 
     /// Kills tunnels left behind by a previous run.

@@ -51,6 +51,27 @@ Every action lives on the expanded row: open, copy local or network URL, reveal 
 your terminal or editor, restart the dev server with the right package manager, pin, ignore, kill.
 Nothing is more than one click deep.
 
+## Sharing a port publicly
+
+Expand a row and hit **Share** to open a Cloudflare quick tunnel, and the public URL
+lands in your clipboard. Needs `cloudflared`:
+
+```sh
+brew install cloudflared
+```
+
+No Cloudflare account and no DNS setup — quick tunnels are account-free.
+
+Requests reach your dev server with `Host: localhost:<port>`, so Vite, Next and Astro
+accept them instead of answering "This host is not allowed". You don't need to add
+anything to `allowedHosts`. If your app needs to see the real public hostname, turn
+that off in Settings → Apps.
+
+**Shared links are deliberately temporary.** A tunnel closes when you stop it, quit, or
+restart Port Manager, and you get a new address next time. Port Manager also kills any
+tunnel left behind by a previous session at launch, so a public URL can never outlive
+the app that opened it.
+
 ## Metrics
 
 CPU, memory, uptime, thread count and an energy estimate come from `libproc`, sampled in the

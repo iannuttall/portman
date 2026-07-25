@@ -705,6 +705,14 @@ final class ServerStore {
 
             do {
                 let url = try await tunnelService.start(port: port)
+
+                // Hold at .starting until DNS has the hostname. Handing over a URL
+                // that isn't resolvable yet means the first click fails and macOS
+                // caches that failure, which reads as a broken tunnel.
+                if let host = TunnelService.hostname(from: url) {
+                    _ = await TunnelService.waitUntilResolvable(host: host)
+                }
+
                 tunnels[port] = TunnelInfo(status: .active, url: url, startedAt: Date())
                 copy(url)
                 actionMessage = "Public URL copied to the clipboard."

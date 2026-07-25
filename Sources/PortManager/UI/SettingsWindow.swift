@@ -260,7 +260,7 @@ private struct AppsSettings: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text("Sharing opens a Cloudflare quick tunnel. The link is public and unauthenticated, and closes when you stop it or quit.")
+                Text("Sharing opens a Cloudflare quick tunnel. The link is public, unauthenticated and temporary — it closes when you stop it, quit, or restart Port Manager, and you get a new address next time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
