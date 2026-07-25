@@ -211,7 +211,13 @@ and launches the app instead. `spctl` runs after stapling, where it reflects wha
 downloader actually gets.
 
 `appcast.xml` in the repo root **is** the update feed — Sparkle reads it from
-`raw.githubusercontent.com`, so committing a new `<item>` is what ships an update. The feed
+`raw.githubusercontent.com`, so committing a new `<item>` is what ships an update.
+
+`raw.githubusercontent.com` sends `max-age=300`, so a freshly pushed `<item>` is invisible
+for up to five minutes and the feed keeps serving the previous version meanwhile. Checking
+for updates in that window returns "you're up to date", which reads exactly like a broken
+release. Wait for the cache before concluding anything is wrong — `curl -I` the feed and
+compare `source-age` against `max-age`. The feed
 URL is baked into every build's Info.plist and cannot move afterwards without orphaning
 everyone on an older version, so it defaults in `build-app.sh` rather than being passed per
 release. (It also means the repo has to stay public.)
