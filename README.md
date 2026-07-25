@@ -112,7 +112,7 @@ up. Every tool in this category ships outside the store for the same reason.
 VERSION=0.3.0 BUILD_NUMBER=3 \
   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
   NOTARY_PROFILE=portman \
-  SPARKLE_FEED_URL=https://example.com/appcast.xml \
+  SPARKLE_FEED_URL=https://ian.is/portman/appcast.xml \
   SPARKLE_PUBLIC_KEY=your-ed-public-key \
   ./scripts/release.sh
 ```

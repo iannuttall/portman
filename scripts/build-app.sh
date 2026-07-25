@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Everything identity-related is a variable: the app is likely to be renamed, and
 # will be signed by a different account than the one it was developed on.
 APP_NAME="${APP_NAME:-portman}"
-BUNDLE_ID="${BUNDLE_ID:-app.portman}"
+BUNDLE_ID="${BUNDLE_ID:-is.ian.portman}"
 VERSION="${VERSION:-0.2.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-2}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
