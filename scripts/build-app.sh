@@ -11,9 +11,13 @@ VERSION="${VERSION:-0.2.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-2}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
-# Sparkle stays dormant unless both of these are set. The app checks for the
-# REPLACE_ prefix and disables its updater entirely when it sees one.
-SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-REPLACE_WITH_APPCAST_URL}"
+# The feed is served straight from the repo. It's baked into every build's
+# Info.plist and can't move afterwards without orphaning everyone on an older
+# version, so it defaults here rather than being passed in per release.
+SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://raw.githubusercontent.com/iannuttall/portman/main/appcast.xml}"
+
+# The updater still stays dormant until a public key is supplied — the app
+# disables it entirely when it sees the REPLACE_ prefix.
 SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-REPLACE_WITH_PUBLIC_ED_KEY}"
 
 BUILD_DIR="$ROOT/.build/release"

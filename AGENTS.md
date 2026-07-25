@@ -173,5 +173,11 @@ would abort every release before it could be notarised. It asserts the hardened-
 and launches the app instead. `spctl` runs after stapling, where it reflects what a
 downloader actually gets.
 
-Sparkle stays dormant unless the build supplies `SPARKLE_FEED_URL` and `SPARKLE_PUBLIC_KEY`.
-The private signing key lives in the keychain and must never enter the repo.
+`appcast.xml` in the repo root **is** the update feed — Sparkle reads it from
+`raw.githubusercontent.com`, so committing a new `<item>` is what ships an update. The feed
+URL is baked into every build's Info.plist and cannot move afterwards without orphaning
+everyone on an older version, so it defaults in `build-app.sh` rather than being passed per
+release. (It also means the repo has to stay public.)
+
+Sparkle stays dormant until the build also supplies `SPARKLE_PUBLIC_KEY`. The private signing
+key lives in the keychain and must never enter the repo.

@@ -8,7 +8,7 @@ set -euo pipefail
 #
 #   SIGN_IDENTITY      "Developer ID Application: Name (TEAMID)"
 #   NOTARY_PROFILE     name of a stored notarytool profile (see below)
-#   SPARKLE_FEED_URL   where the appcast will be hosted
+#   SPARKLE_FEED_URL   defaults to the appcast in this repo; override only to test
 #   SPARKLE_PUBLIC_KEY the EdDSA public key printed by Sparkle's generate_keys
 #   VERSION            e.g. 0.3.0
 #   BUILD_NUMBER       monotonic integer
@@ -101,7 +101,7 @@ cat <<SUMMARY
 
 ==> Done: $DMG_PATH  (${SIZE} bytes)
 
-Add an <item> to appcast.xml using the sparkle:edSignature printed above:
+Add an <item> to appcast.xml, then commit it — that file IS the update feed:
 
   <item>
     <title>$VERSION</title>
@@ -109,7 +109,7 @@ Add an <item> to appcast.xml using the sparkle:edSignature printed above:
     <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
     <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
     <enclosure
-      url="https://github.com/OWNER/REPO/releases/download/v$VERSION/$DMG_NAME"
+      url="https://github.com/iannuttall/portman/releases/download/v$VERSION/$DMG_NAME"
       length="$SIZE"
       type="application/octet-stream"
       sparkle:edSignature="PASTE_SIGNATURE" />
