@@ -14,7 +14,15 @@ let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
 let base = Color(red: 0x19/255, green: 0x19/255, blue: 0x1a/255)
 
 /// Ink height as a fraction of the icon body.
-let inkFraction = 0.80
+let inkFraction = 0.62
+
+/// macOS 26 wraps app icons in its own rounded shape, so the artwork has to run
+/// edge to edge and let the system do the rounding. Drawing our own inset squircle
+/// produced a squircle inside a squircle with a grey border around it.
+///
+/// The cost is macOS 15 and earlier, which do no masking — there this renders as a
+/// square tile. Set FULL_BLEED=0 to get the self-rounded version back.
+let fullBleed = ProcessInfo.processInfo.environment["FULL_BLEED"] != "0" 
 /// Optical centring. The mark is geometrically dead centre, but a P carries its
 /// mass in the stem and bowl with the lower right empty, so its centre of mass sits
 /// ~6% up and left of its bounding box. Correcting by half of that reads as centred;
@@ -70,17 +78,18 @@ guard let mark = cropToInk(markPath) else {
 func icon(side: CGFloat) -> NSImage? {
     // Apple's grid: the body occupies the middle 824 of a 1024 canvas, corner
     // radius ~22.37% of the body, continuous curvature.
-    let body = side * 824.0 / 1024.0
+    let body = fullBleed ? side : side * 824.0 / 1024.0
     let frame = body * inkFraction
     let nudge = frame * opticalFraction
 
     let view = ZStack {
-        RoundedRectangle(cornerRadius: body * 0.2237, style: .continuous)
+        RoundedRectangle(cornerRadius: fullBleed ? 0 : body * 0.2237, style: .continuous)
             .fill(LinearGradient(
                 colors: [base.blended(0.10, with: .white), base, base.blended(0.35, with: .black)],
                 startPoint: .top, endPoint: .bottom))
             .frame(width: body, height: body)
-            .shadow(color: .black.opacity(0.30), radius: side * 0.014, y: side * 0.010)
+            .shadow(color: .black.opacity(fullBleed ? 0 : 0.30),
+                    radius: side * 0.014, y: side * 0.010)
 
         // A shadow at zero offset is a glow; a tight one and a wide one give a
         // bright core with a halo. Kept restrained — a stronger bloom bleeds into
