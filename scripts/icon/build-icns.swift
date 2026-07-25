@@ -1,15 +1,25 @@
 import AppKit
 import SwiftUI
 
-// Builds the legacy .icns. macOS 15 and earlier do no compositing of their own,
-// so the squircle, the inset, the shadow, the body gradient and the glyph's glow
-// all have to be drawn here.
+// Builds the legacy .icns. macOS 15 and earlier do no compositing of app icons,
+// so the squircle, the inset, the drop shadow, the body gradient and the glyph's
+// glow all have to be drawn here.
+//
+//   swiftc -swift-version 6 scripts/icon/build-icns.swift -o /tmp/build-icns
+//   /tmp/build-icns <mark.png> /tmp/AppIcon.iconset
+//   iconutil -c icns /tmp/AppIcon.iconset -o Resources/AppIcon.icns
 
 let markPath = CommandLine.arguments[1]
 let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
-guard let mark = NSImage(contentsOfFile: markPath) else { exit(1) }
-
 let base = Color(red: 0x19/255, green: 0x19/255, blue: 0x1a/255)
+
+/// Ink height as a fraction of the icon body.
+let inkFraction = 0.80
+/// Optical centring. The mark is geometrically dead centre, but a P carries its
+/// mass in the stem and bowl with the lower right empty, so its centre of mass sits
+/// ~6% up and left of its bounding box. Correcting by half of that reads as centred;
+/// the full correction overshoots and opens a gap on the left.
+let opticalFraction = 0.031
 
 extension Color {
     func blended(_ amount: Double, with other: NSColor) -> Color {
@@ -17,32 +27,72 @@ extension Color {
     }
 }
 
+/// Trims the transparent border so the image's bounds ARE its ink.
+///
+/// The source artwork carries its own ~100px margin. Left in, it silently pads
+/// every size calculation and "80%" stops meaning 80%.
+func cropToInk(_ path: String) -> NSImage? {
+    guard let image = NSImage(contentsOfFile: path), let tiff = image.tiffRepresentation,
+          let rep = NSBitmapImageRep(data: tiff) else { return nil }
+
+    let w = rep.pixelsWide, h = rep.pixelsHigh
+    var minX = w, maxX = -1, minY = h, maxY = -1
+
+    for y in 0..<h {
+        for x in 0..<w {
+            guard let colour = rep.colorAt(x: x, y: y), colour.alphaComponent > 0.05 else { continue }
+            if x < minX { minX = x }
+            if x > maxX { maxX = x }
+            if y < minY { minY = y }
+            if y > maxY { maxY = y }
+        }
+    }
+
+    guard maxX > minX, maxY > minY else { return nil }
+
+    let rect = NSRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    let cropped = NSImage(size: rect.size)
+    cropped.lockFocus()
+    image.draw(in: NSRect(origin: .zero, size: rect.size),
+               from: NSRect(x: rect.minX, y: CGFloat(h) - rect.maxY,
+                            width: rect.width, height: rect.height),
+               operation: .copy, fraction: 1)
+    cropped.unlockFocus()
+    return cropped
+}
+
+guard let mark = cropToInk(markPath) else {
+    print("could not read a mark from \(markPath)")
+    exit(1)
+}
+
 @MainActor
 func icon(side: CGFloat) -> NSImage? {
-    // Apple's grid: the body occupies the middle 824 of a 1024 canvas, with a
-    // corner radius of ~22.37% of the body and continuous curvature.
+    // Apple's grid: the body occupies the middle 824 of a 1024 canvas, corner
+    // radius ~22.37% of the body, continuous curvature.
     let body = side * 824.0 / 1024.0
-    let radius = body * 0.2237
+    let frame = body * inkFraction
+    let nudge = frame * opticalFraction
 
     let view = ZStack {
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
+        RoundedRectangle(cornerRadius: body * 0.2237, style: .continuous)
             .fill(LinearGradient(
                 colors: [base.blended(0.10, with: .white), base, base.blended(0.35, with: .black)],
                 startPoint: .top, endPoint: .bottom))
             .frame(width: body, height: body)
             .shadow(color: .black.opacity(0.30), radius: side * 0.014, y: side * 0.010)
 
-        // A shadow at zero offset is a glow; two of them — tight then wide — give
-        // a bright core with a halo around it.
+        // A shadow at zero offset is a glow; a tight one and a wide one give a
+        // bright core with a halo. Kept restrained — a stronger bloom bleeds into
+        // the plug cutout and softens the detail the mark depends on.
         Image(nsImage: mark)
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
-            .frame(width: body * 0.78, height: body * 0.78)
-            // Tuned down from a stronger bloom: the wider glow bled into the plug
-            // cutout and softened the one detail the whole mark depends on.
+            .frame(width: frame, height: frame)
             .shadow(color: .white.opacity(0.42), radius: side * 0.012)
             .shadow(color: .white.opacity(0.20), radius: side * 0.038)
+            .offset(x: nudge, y: nudge)
     }
     .frame(width: side, height: side)
 
@@ -60,6 +110,7 @@ let sizes: [(String, CGFloat)] = [
 ]
 
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
 MainActor.assumeIsolated {
     for (name, px) in sizes {
         guard let image = icon(side: px), let tiff = image.tiffRepresentation,
@@ -69,4 +120,5 @@ MainActor.assumeIsolated {
         try? png.write(to: outDir.appendingPathComponent("\(name).png"))
     }
 }
-print("wrote \(sizes.count) renditions")
+
+print("wrote \(sizes.count) renditions at \(Int(inkFraction * 100))% ink")
