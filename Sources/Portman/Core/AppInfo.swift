@@ -5,7 +5,7 @@ import Foundation
 /// Read from the bundle where possible so a rename or a change of signing account
 /// doesn't need a source change — the build script sets both.
 enum AppInfo {
-    static let displayName = "portman"
+    static let displayName = "Portman"
 
     static var bundleID: String {
         Bundle.main.bundleIdentifier ?? "is.ian.portman"

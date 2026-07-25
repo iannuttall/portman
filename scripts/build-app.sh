@@ -5,7 +5,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Everything identity-related is a variable: the app is likely to be renamed, and
 # will be signed by a different account than the one it was developed on.
-APP_NAME="${APP_NAME:-portman}"
+#
+# APP_NAME is the display name — the bundle, the menu bar, what people call it.
+# EXECUTABLE_NAME is the binary inside it, kept lowercase to match the SwiftPM
+# product and the `portman --list` people type. The two are separate because
+# capitalising a command is unusual and would break anyone scripting it on a
+# case-sensitive volume.
+APP_NAME="${APP_NAME:-Portman}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-portman}"
 BUNDLE_ID="${BUNDLE_ID:-is.ian.portman}"
 VERSION="${VERSION:-0.2.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-2}"
@@ -47,13 +54,13 @@ BUILD_DIR="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
-cp "$BUILD_DIR/portman" "$MACOS_DIR/$APP_NAME"
+cp "$BUILD_DIR/portman" "$MACOS_DIR/$EXECUTABLE_NAME"
 
 # SwiftPM leaves the full symbol table in a release build — it's over half the
 # binary and nothing at runtime reads it. `-x` drops local symbols only, so
 # crash reports still symbolicate the public frames. Must run before codesign,
 # which seals the bytes.
-strip -x "$MACOS_DIR/$APP_NAME"
+strip -x "$MACOS_DIR/$EXECUTABLE_NAME"
 
 # Sparkle ships as a framework, so it has to be embedded and the binary told to
 # look for it inside the bundle. SwiftPM links it but doesn't build app bundles.
@@ -74,7 +81,7 @@ sign () {
 
 if [ -n "$SPARKLE_FRAMEWORK" ]; then
   cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
-  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$APP_NAME"
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$EXECUTABLE_NAME"
 
   # Sparkle's XCFramework ships the headers you'd compile against. A shipped app
   # links at build time and never reads them, so they're a quarter of a megabyte
@@ -88,7 +95,7 @@ if [ -n "$SPARKLE_FRAMEWORK" ]; then
   # because a single-arch build would otherwise carry a megabyte of Sparkle that
   # can never execute. The arch is read off the built binary rather than
   # hardcoded, which is what makes it safe to leave here while universal.
-  APP_ARCHS="$(lipo -archs "$MACOS_DIR/$APP_NAME")"
+  APP_ARCHS="$(lipo -archs "$MACOS_DIR/$EXECUTABLE_NAME")"
 
   if [ "$(printf '%s' "$APP_ARCHS" | wc -w)" -eq 1 ]; then
     while IFS= read -r macho; do
@@ -154,7 +161,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>$APP_NAME</string>
+  <string>$EXECUTABLE_NAME</string>
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
   <key>CFBundleInfoDictionaryVersion</key>

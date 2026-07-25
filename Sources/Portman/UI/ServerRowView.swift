@@ -180,7 +180,11 @@ struct ServerRowView: View {
 
     private func dirtyBranchLabel(_ branch: String, git: GitStatus?) -> String {
         guard let count = git?.dirtyCount, count > 0 else { return branch }
-        return "\(branch) •\(count)"
+        // A thin space, not a full one: the marker belongs to the count, so the
+        // two read as a single token rather than another ` · ` separated part.
+        // Set solid, U+2022 collides with the digit — it's a heavier glyph than
+        // the U+00B7 separators and needs the gap more, not less.
+        return "\(branch) •\u{2009}\(count)"
     }
 
     private func branchHelp(git: GitStatus?) -> String {

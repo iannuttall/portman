@@ -20,7 +20,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="${APP_NAME:-portman}"
+APP_NAME="${APP_NAME:-Portman}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-portman}"
 VERSION="${VERSION:?set VERSION, e.g. VERSION=0.3.0}"
 BUILD_NUMBER="${BUILD_NUMBER:?set BUILD_NUMBER, e.g. BUILD_NUMBER=3}"
 SIGN_IDENTITY="${SIGN_IDENTITY:?set SIGN_IDENTITY to a Developer ID Application identity}"
@@ -28,7 +29,9 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
 DIST="$ROOT/dist"
 APP_DIR="$DIST/$APP_NAME.app"
-DMG_NAME="$(echo "$APP_NAME" | tr ' ' '_')-$VERSION.dmg"
+# Lowercase, from the executable name: this ends up in the download URL and in
+# the appcast enclosure, and 0.2.0 already shipped as portman-0.2.0.dmg.
+DMG_NAME="$EXECUTABLE_NAME-$VERSION.dmg"
 DMG_PATH="$DIST/$DMG_NAME"
 
 echo "==> Building $APP_NAME $VERSION ($BUILD_NUMBER)"
@@ -57,7 +60,7 @@ fi
 
 # The app has to actually launch. Library validation failures are invisible to
 # codesign and only surface when dyld refuses to map the framework.
-"$APP_DIR/Contents/MacOS/$APP_NAME" & LAUNCH_PID=$!
+"$APP_DIR/Contents/MacOS/$EXECUTABLE_NAME" & LAUNCH_PID=$!
 sleep 5
 if kill -0 $LAUNCH_PID 2>/dev/null; then
   kill $LAUNCH_PID
@@ -69,7 +72,8 @@ fi
 echo "==> Building DMG"
 # SKIP_BUILD: the app is already built and signed above; rebuilding
 # would discard that signature.
-SKIP_BUILD=1 VERSION="$VERSION" APP_NAME="$APP_NAME" ./scripts/build-dmg.sh
+SKIP_BUILD=1 VERSION="$VERSION" APP_NAME="$APP_NAME" \
+  EXECUTABLE_NAME="$EXECUTABLE_NAME" ./scripts/build-dmg.sh
 codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG_PATH"
 
 if [ -z "$NOTARY_PROFILE" ]; then

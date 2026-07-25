@@ -1,6 +1,6 @@
 # Agent Notes
 
-portman is a macOS menu bar app that lists everything listening locally, identifies what it
+Portman is a macOS menu bar app that lists everything listening locally, identifies what it
 is, and lets you act on it. Swift 6, SwiftUI hosted in an AppKit panel, SwiftPM only — there
 is no Xcode project.
 
@@ -11,7 +11,7 @@ that was found the hard way, and undoing one reintroduces it.
 
 The category is crowded with apps that list ports and kill them. That part is a commodity.
 
-portman's edge is **knowing what a server actually is** — the project, the framework and
+Portman's edge is **knowing what a server actually is** — the project, the framework and
 version, the git branch, whether it's still answering, what page it's serving. Detection is
 the moat. When choosing between two implementations, favour the one that identifies things
 more precisely, even if it costs more work.
@@ -130,8 +130,15 @@ it belongs there.
 `ignoredCommands`, `ignoredTargets`, `showAllProcesses`). Don't rename them or people lose
 their configuration.
 
-The app's name and identity are build variables (`APP_NAME`, `BUNDLE_ID`, `SIGN_IDENTITY`),
-and `AppInfo` reads them from the bundle. Don't hardcode either in source.
+The app's name and identity are build variables (`APP_NAME`, `EXECUTABLE_NAME`, `BUNDLE_ID`,
+`SIGN_IDENTITY`), and `AppInfo` reads them from the bundle. Don't hardcode any of them in
+source.
+
+`APP_NAME` is the display name and `EXECUTABLE_NAME` the binary inside the bundle, and they
+differ on purpose: `Portman.app` containing `MacOS/portman`. Capitalising a command is
+unusual, and it would break anyone scripting `portman` on a case-sensitive volume. The DMG
+takes the lowercase name too, because it ends up in a download URL that the appcast has
+already published.
 
 ## Development Commands
 
@@ -140,7 +147,7 @@ swift build                  # build
 swift run portman            # run from source (no bundle: previews and login items won't work)
 swift run portman --list     # scan and print as TSV — fastest way to check detection
 swift test                   # pure-logic tests
-make build                   # build dist/portman.app
+make build                   # build dist/Portman.app
 make publish-local           # build, sign, install to ~/Applications, relaunch
 make dmg                     # drag-install DMG
 ```

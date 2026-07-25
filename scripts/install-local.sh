@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="${APP_NAME:-portman}"
+APP_NAME="${APP_NAME:-Portman}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-portman}"
 SOURCE_APP="$ROOT/dist/$APP_NAME.app"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/Applications}"
 INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"
@@ -12,8 +13,8 @@ ENABLE_LOGIN="${ENABLE_LOGIN:-1}"
 
 mkdir -p "$INSTALL_DIR"
 
-pkill -f "$ROOT/dist/$APP_NAME.app/Contents/MacOS/$APP_NAME" || true
-pkill -f "$INSTALLED_APP/Contents/MacOS/$APP_NAME" || true
+pkill -f "$ROOT/dist/$APP_NAME.app/Contents/MacOS/$EXECUTABLE_NAME" || true
+pkill -f "$INSTALLED_APP/Contents/MacOS/$EXECUTABLE_NAME" || true
 
 rm -rf "$INSTALLED_APP"
 ditto "$SOURCE_APP" "$INSTALLED_APP"
@@ -22,7 +23,7 @@ xattr -dr com.apple.quarantine "$INSTALLED_APP" 2>/dev/null || true
 codesign --verify --deep --strict "$INSTALLED_APP"
 
 if [[ "$ENABLE_LOGIN" == "1" ]]; then
-    LOGIN_STATUS="$("$INSTALLED_APP/Contents/MacOS/$APP_NAME" --enable-login)"
+    LOGIN_STATUS="$("$INSTALLED_APP/Contents/MacOS/$EXECUTABLE_NAME" --enable-login)"
 
     if [[ "$LOGIN_STATUS" == "requires-approval" ]]; then
         echo "Open at Login requires approval in System Settings > General > Login Items."

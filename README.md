@@ -1,6 +1,6 @@
 <div align="center">
 
-# portman
+# Portman
 
 **Every port on your Mac, and what's actually using it.**
 
@@ -41,7 +41,7 @@ Astro, Next.js, TanStack Start, Vite, Remix, SvelteKit, Nuxt, Angular, Expo, Rai
 FastAPI and more.
 
 **It catches wedged servers.** A dev server that's holding its port but no longer answering
-looks identical to a healthy one everywhere else. portman probes each port and flags it —
+looks identical to a healthy one everywhere else. Portman probes each port and flags it —
 `alive, but not responding`. That distinction is the difference between "why is 3000 taken"
 and "oh, that one's hung".
 
@@ -105,7 +105,7 @@ Requests reach your dev server with `Host: localhost:<port>`, so Vite, Next and 
 them instead of answering "This host is not allowed". You don't need to touch `allowedHosts`.
 
 **Shared links are deliberately temporary.** A tunnel closes when you stop it, quit, or
-restart portman, and you get a new address next time. portman also kills any tunnel left
+restart Portman, and you get a new address next time. Portman also kills any tunnel left
 behind by a previous session at launch, so a public URL can never outlive the app that opened
 it.
 
@@ -138,8 +138,8 @@ requests are to your own localhost ports, and to Cloudflare if you explicitly sh
 **Signed and notarised**, so macOS can verify it hasn't been tampered with since it was built:
 
 ```sh
-codesign --verify --deep --strict --verbose=2 /Applications/portman.app
-spctl --assess --type execute /Applications/portman.app
+codesign --verify --deep --strict --verbose=2 /Applications/Portman.app
+spctl --assess --type execute /Applications/Portman.app
 ```
 
 **Checksums.** Every release publishes a SHA-256. Compare it against what you downloaded:
@@ -153,7 +153,7 @@ shasum -a 256 ~/Downloads/portman-*.dmg
 ## Permissions
 
 Focusing the terminal tab a server runs in uses AppleScript, so macOS asks for Automation
-access the first time. Declining is fine — portman falls back to opening a new terminal at the
+access the first time. Declining is fine — Portman falls back to opening a new terminal at the
 project root, which is what happens anyway for servers that have outlived their shell.
 
 Nothing else requires a permission prompt. There is no privileged helper.
@@ -165,7 +165,7 @@ swift build                  # build
 swift run portman            # run from source
 swift run portman --list     # scan and print as TSV, no UI
 swift test                   # pure-logic tests
-make build                   # build dist/portman.app
+make build                   # build dist/Portman.app
 make publish-local           # build, sign, install to ~/Applications
 make dmg                     # drag-install DMG
 ```
@@ -203,7 +203,7 @@ message saying so rather than pretending it worked.
 ### Does it run on Intel Macs?
 
 Yes. The release is a universal binary, so it runs natively on Apple Silicon and Intel — no
-Rosetta. If your Mac runs macOS 15, it runs portman.
+Rosetta. If your Mac runs macOS 15, it runs Portman.
 
 ### Why isn't it on the Mac App Store?
 
