@@ -32,6 +32,10 @@ struct DetailCard: View {
 
             exposureRow
 
+            if let tunnel = store.tunnel(for: entry.port) {
+                tunnelRow(tunnel)
+            }
+
             if let container = entry.container {
                 dockerRow(container)
             }
@@ -246,6 +250,52 @@ struct DetailCard: View {
         }
     }
 
+    /// The public URL, once a quick tunnel is up.
+    @ViewBuilder
+    private func tunnelRow(_ tunnel: TunnelInfo) -> some View {
+        HStack(spacing: Theme.Space.snug) {
+            switch tunnel.status {
+            case .starting:
+                ProgressView().controlSize(.small)
+                MetaLabel(symbol: nil, text: "Opening a public tunnel…")
+
+            case .active:
+                Image(systemName: "globe")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.Colour.hung)
+
+                Text(tunnel.url ?? "")
+                    .font(Theme.Typography.metaMono)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .help("Anyone with this link can reach port \(entry.port)")
+
+                if let url = tunnel.url {
+                    IconButton(symbol: "doc.on.doc", help: "Copy public URL") {
+                        store.copy(url)
+                    }
+
+                    IconButton(symbol: "arrow.up.right.square", help: "Open public URL") {
+                        if let link = URL(string: url) {
+                            AppLauncher.openInBrowser(link, bundleID: Preferences.browserBundleID)
+                        }
+                    }
+                }
+
+            case .failed:
+                MetaLabel(
+                    symbol: "exclamationmark.triangle.fill",
+                    text: tunnel.error ?? "Tunnel failed",
+                    tint: Theme.Colour.hung
+                )
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
     private func dockerRow(_ container: DockerContainer) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             MetaLabel(symbol: "shippingbox", text: container.name)
@@ -335,6 +385,18 @@ struct DetailCard: View {
 
                 ActionButton(label: "Editor", symbol: "chevron.left.forwardslash.chevron.right") {
                     AppLauncher.openInEditor(path: path, bundleID: Preferences.editorBundleID)
+                }
+            }
+
+            if store.tunnel(for: entry.port) != nil {
+                ActionButton(label: "Stop sharing", symbol: "globe.slash") {
+                    store.stopTunnel(port: entry.port)
+                }
+            } else if entry.health?.state != .nonHTTP {
+                // Shown even without cloudflared installed — tapping it explains what's
+                // missing, which beats the feature simply not existing.
+                ActionButton(label: "Share", symbol: "globe") {
+                    store.requestShare(entry)
                 }
             }
 

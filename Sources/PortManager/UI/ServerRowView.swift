@@ -121,6 +121,14 @@ struct ServerRowView: View {
                 )
             }
 
+            if store.tunnel(for: entry.port)?.status == .active {
+                Chip(
+                    text: "public",
+                    tint: Theme.Colour.hung,
+                    help: "Shared on the public internet through a Cloudflare tunnel"
+                )
+            }
+
             if entry.health?.state == .hung {
                 Chip(
                     text: "not responding",

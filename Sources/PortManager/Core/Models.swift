@@ -130,6 +130,22 @@ struct HealthReport: Codable, Sendable, Hashable {
     }
 }
 
+// MARK: - Tunnel
+
+enum TunnelStatus: String, Codable, Sendable, Hashable {
+    case starting
+    case active
+    case failed
+}
+
+/// A Cloudflare quick tunnel putting one local port on the public internet.
+struct TunnelInfo: Codable, Sendable, Hashable {
+    var status: TunnelStatus
+    var url: String?
+    var error: String?
+    var startedAt: Date?
+}
+
 // MARK: - Git
 
 struct GitStatus: Codable, Sendable, Hashable {

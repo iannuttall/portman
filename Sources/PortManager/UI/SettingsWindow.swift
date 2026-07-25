@@ -196,6 +196,7 @@ private struct AppsSettings: View {
     @State private var terminal = Preferences.terminalBundleID
     @State private var editor = Preferences.editorBundleID
     @State private var browser = Preferences.browserBundleID
+    @State private var cloudflaredPath = Preferences.cloudflaredPath ?? ""
 
     var body: some View {
         Form {
@@ -223,6 +224,33 @@ private struct AppsSettings: View {
                 .onChange(of: browser) { _, newValue in Preferences.browserBundleID = newValue }
             } footer: {
                 Text("Only apps installed on this Mac are listed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Public sharing") {
+                if TunnelService.isInstalled {
+                    Label(
+                        TunnelService.executablePath() ?? "cloudflared",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text("Install cloudflared to share a port publicly:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text("brew install cloudflared")
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+
+                TextField("Custom cloudflared path", text: $cloudflaredPath)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { Preferences.cloudflaredPath = cloudflaredPath }
+
+                Text("Sharing opens a Cloudflare quick tunnel. The link is public and unauthenticated, and closes when you stop it or quit.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

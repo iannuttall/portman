@@ -429,3 +429,30 @@ private func makeEntry(
         metrics: cpu.map { ProcessSample(cpuPercent: $0) }
     )
 }
+
+// MARK: - Tunnels
+
+final class TunnelURLTests: XCTestCase {
+    /// cloudflared prints the URL inside an ASCII banner, not on a line of its own.
+    func testExtractsURLFromABannerLine() {
+        let line = "|  https://random-words-here.trycloudflare.com                     |"
+        XCTAssertEqual(
+            TunnelService.extractURL(from: line),
+            "https://random-words-here.trycloudflare.com"
+        )
+    }
+
+    func testExtractsURLFromALogLine() {
+        let line = "2026-07-25T09:30:00Z INF +----+ Your quick Tunnel has been created! Visit it at https://abc-def-123.trycloudflare.com"
+        XCTAssertEqual(
+            TunnelService.extractURL(from: line),
+            "https://abc-def-123.trycloudflare.com"
+        )
+    }
+
+    func testIgnoresUnrelatedLines() {
+        XCTAssertNil(TunnelService.extractURL(from: "INF Requesting new quick Tunnel on trycloudflare.com..."))
+        XCTAssertNil(TunnelService.extractURL(from: "https://example.com"))
+        XCTAssertNil(TunnelService.extractURL(from: ""))
+    }
+}

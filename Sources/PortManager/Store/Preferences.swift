@@ -30,6 +30,7 @@ enum Preferences {
         static let showPageTitles = "showPageTitles"
         static let reduceMotion = "reduceMotion"
         static let rowDensity = "rowDensity"
+        static let cloudflaredPath = "cloudflaredPath"
     }
 
     // MARK: Visibility
@@ -135,6 +136,12 @@ enum Preferences {
                 ?? AppLauncher.installed(.editor).first?.id
         }
         set { defaults.set(newValue, forKey: Key.editorBundleID) }
+    }
+
+    /// Overrides the search paths when cloudflared lives somewhere unusual.
+    static var cloudflaredPath: String? {
+        get { defaults.string(forKey: Key.cloudflaredPath) }
+        set { defaults.set(newValue, forKey: Key.cloudflaredPath) }
     }
 
     /// nil means "whatever the system default browser is".

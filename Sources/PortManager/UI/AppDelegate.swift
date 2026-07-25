@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // A quick tunnel lives and dies with its cloudflared process, so a previous
+        // crash can leave one holding a public URL that nothing is tracking.
+        TunnelService.killOrphans()
+
         panelController = PanelController(store: store)
         store.start()
 
@@ -35,6 +39,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// Tunnels must not outlive the app — quitting has to close the public door.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !store.tunnels.isEmpty else { return .terminateNow }
+
+        Task { @MainActor in
+            await store.stopAllTunnels()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {

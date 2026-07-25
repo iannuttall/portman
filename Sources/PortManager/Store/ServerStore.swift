@@ -93,8 +93,10 @@ final class ServerStore {
     var selectedRowID: String?
     var expandedRowID: String?
 
-    /// A bulk kill waiting on confirmation.
-    var pendingKill: PendingKill?
+    /// An action waiting on confirmation.
+    var pendingConfirmation: PendingConfirmation?
+    /// Public tunnels, keyed by port.
+    var tunnels: [Int: TunnelInfo] = [:]
     /// Transient footer message when an action didn't do what the UI implied.
     var actionMessage: String?
 
@@ -104,6 +106,7 @@ final class ServerStore {
     @ObservationIgnored private let sampler = ProcessMetricsSampler()
     @ObservationIgnored private let gitInspector = GitInspector()
     @ObservationIgnored private let healthProbe = HealthProbe()
+    @ObservationIgnored private let tunnelService = TunnelService()
 
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var messageTask: Task<Void, Never>?
@@ -541,27 +544,36 @@ final class ServerStore {
         suppress(ports: [row.entry.port] + row.related.map(\.port))
     }
 
-    /// Bulk kills ask first. A single row is cheap to restart; wiping out every server
-    /// behind a filter is not, and there is no undo for it.
-    struct PendingKill: Identifiable {
+    /// Anything with no undo asks first: a bulk kill, or putting a port on the
+    /// public internet.
+    struct PendingConfirmation: Identifiable {
         let id = UUID()
-        let rows: [ServerRowModel]
-        let title: String
+        let message: String
+        let confirmLabel: String
+        let isDestructive: Bool
+        let perform: () -> Void
     }
 
     func requestKill(rows targets: [ServerRowModel], title: String) {
         guard !targets.isEmpty else { return }
-        pendingKill = PendingKill(rows: targets, title: title)
+
+        pendingConfirmation = PendingConfirmation(
+            message: "Kill \(targets.count) servers \(title)? This can't be undone.",
+            confirmLabel: "Kill \(targets.count)",
+            isDestructive: true
+        ) { [weak self] in
+            self?.kill(rows: targets)
+        }
     }
 
-    func confirmPendingKill() {
-        guard let pendingKill else { return }
-        self.pendingKill = nil
-        kill(rows: pendingKill.rows)
+    func confirmPending() {
+        guard let pending = pendingConfirmation else { return }
+        pendingConfirmation = nil
+        pending.perform()
     }
 
-    func cancelPendingKill() {
-        pendingKill = nil
+    func cancelPending() {
+        pendingConfirmation = nil
     }
 
     func kill(rows targets: [ServerRowModel]) {
@@ -655,6 +667,67 @@ final class ServerStore {
     func canRestart(_ row: ServerRowModel) -> Bool {
         guard let path = row.entry.path else { return false }
         return AppLauncher.devCommand(for: path) != nil
+    }
+
+    // MARK: - Public tunnels
+
+    var canShare: Bool {
+        TunnelService.isInstalled
+    }
+
+    func tunnel(for port: Int) -> TunnelInfo? {
+        tunnels[port]
+    }
+
+    /// Asks first. A quick tunnel puts the port on the open internet with no
+    /// authentication in front of it, which is not something to do by mistake.
+    func requestShare(_ entry: ServerEntry) {
+        guard canShare else {
+            actionMessage = TunnelError.notInstalled.localizedDescription
+            clearActionMessageLater()
+            return
+        }
+
+        pendingConfirmation = PendingConfirmation(
+            message: "Put port \(entry.port) on the public internet? Anyone with the link can reach it.",
+            confirmLabel: "Share",
+            isDestructive: false
+        ) { [weak self] in
+            self?.startTunnel(port: entry.port)
+        }
+    }
+
+    func startTunnel(port: Int) {
+        tunnels[port] = TunnelInfo(status: .starting)
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let url = try await tunnelService.start(port: port)
+                tunnels[port] = TunnelInfo(status: .active, url: url, startedAt: Date())
+                copy(url)
+                actionMessage = "Public URL copied to the clipboard."
+                clearActionMessageLater()
+            } catch {
+                tunnels[port] = TunnelInfo(status: .failed, error: error.localizedDescription)
+                actionMessage = error.localizedDescription
+                clearActionMessageLater()
+            }
+        }
+    }
+
+    func stopTunnel(port: Int) {
+        tunnels.removeValue(forKey: port)
+
+        Task { [weak self] in
+            await self?.tunnelService.stop(port: port)
+        }
+    }
+
+    func stopAllTunnels() async {
+        tunnels.removeAll()
+        await tunnelService.stopAll()
     }
 
     // MARK: - Pins and ignores

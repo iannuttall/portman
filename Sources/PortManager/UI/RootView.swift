@@ -256,7 +256,7 @@ struct RootView: View {
 
     @ViewBuilder
     private var footer: some View {
-        if let pending = store.pendingKill {
+        if let pending = store.pendingConfirmation {
             confirmBar(pending)
         } else {
             normalFooter
@@ -268,29 +268,35 @@ struct RootView: View {
     /// A dialog is its own window, so presenting it took key away from the panel —
     /// which dismissed the panel out from under the dialog, and resized it off its
     /// menu bar anchor on the way back.
-    private func confirmBar(_ pending: ServerStore.PendingKill) -> some View {
+    private func confirmBar(_ pending: ServerStore.PendingConfirmation) -> some View {
         HStack(spacing: Theme.Space.regular) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
-                .foregroundStyle(Theme.Colour.destructive)
+                .foregroundStyle(pending.isDestructive ? Theme.Colour.destructive : Theme.Colour.hung)
 
-            Text("Kill \(pending.rows.count) servers? This can't be undone.")
+            Text(pending.message)
                 .font(Theme.Typography.meta)
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
 
-            ActionButton(label: "Cancel") { store.cancelPendingKill() }
+            ActionButton(label: "Cancel") { store.cancelPending() }
 
-            ActionButton(label: "Kill \(pending.rows.count)", destructive: true) {
-                store.confirmPendingKill()
+            ActionButton(
+                label: pending.confirmLabel,
+                destructive: pending.isDestructive,
+                prominent: !pending.isDestructive
+            ) {
+                store.confirmPending()
             }
         }
         .padding(.horizontal, Theme.Space.gutter)
         .padding(.vertical, Theme.Space.regular)
-        .background(Theme.Colour.destructive.opacity(0.08))
+        .background(
+            (pending.isDestructive ? Theme.Colour.destructive : Theme.Colour.hung).opacity(0.08)
+        )
     }
 
     private var normalFooter: some View {
