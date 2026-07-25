@@ -6,13 +6,27 @@
     <language>en</language>
 
     <!--
-      Sparkle reads this file to find updates. Host it at the URL you pass as
-      SPARKLE_FEED_URL, and add one <item> per release — scripts/release.sh prints
-      a ready-made block with the correct length and signature.
-
-      No <item> entries means no updates are available, which is the correct state
-      before the first release.
+      Sparkle reads this file to find updates, straight from raw.githubusercontent.
+      Committing an <item> here is what ships an update — nothing else publishes it.
+      scripts/release.sh prints a ready-made block with the length and signature
+      already filled in. Newest first.
     -->
+
+    <item>
+      <title>0.2.0</title>
+      <pubDate>Sat, 25 Jul 2026 20:15:00 +0000</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>First public release.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/iannuttall/portman/releases/download/v0.2.0/portman-0.2.0.dmg"
+        length="4403565"
+        type="application/octet-stream"
+        sparkle:edSignature="ciebtQ73rxioiKEq2Ywxb6KgK1y4XYR+AOzGWzslmKsaY6/jbPT2VFdAhF32QK8nLaJzk/7SAY761dlTNlm8BA==" />
+    </item>
 
   </channel>
 </rss>
