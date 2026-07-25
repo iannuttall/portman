@@ -20,7 +20,6 @@ SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://raw.githubusercontent.com/iannutta
 # disables it entirely when it sees the REPLACE_ prefix.
 SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-REPLACE_WITH_PUBLIC_ED_KEY}"
 
-BUILD_DIR="$ROOT/.build/release"
 APP_DIR="$ROOT/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -28,7 +27,19 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
 cd "$ROOT"
-swift build -c release
+
+# Ships universal so the app runs everywhere macOS 15 does, Intel included.
+# Nothing in the codebase is architecture-specific; the cost is the second slice
+# in the download.
+ARCH_FLAGS=(--arch arm64 --arch x86_64)
+
+swift build -c release "${ARCH_FLAGS[@]}"
+
+# Asked for, never hardcoded. A universal build lands in .build/apple/Products,
+# but .build/release is a symlink to the single-arch directory that survives from
+# any earlier plain `swift build` — copying from it would silently ship one slice
+# out of an app that claims two.
+BUILD_DIR="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"

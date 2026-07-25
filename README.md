@@ -25,7 +25,7 @@ If you run one dev server at a time, you don't need this.
 ## Quick start
 
 [Download the DMG](https://github.com/iannuttall/portman/releases/latest) and drag it to
-Applications. Requires **macOS 15 or later on Apple Silicon**.
+Applications. Requires **macOS 15 or later**, on Apple Silicon or Intel.
 
 Press **⌥⌘P** from anywhere, or click the plug in the menu bar, and start typing.
 
@@ -202,10 +202,8 @@ message saying so rather than pretending it worked.
 
 ### Does it run on Intel Macs?
 
-Not as shipped — the release build is Apple Silicon only, which keeps the download at 3 MB
-instead of 6. Nothing in the code is architecture-specific, though, so a universal build is a
-one-line change (`swift build -c release --arch arm64 --arch x86_64`) and it compiles clean.
-If you're on an Intel Mac running Sequoia, open an issue and I'll ship universal builds.
+Yes. The release is a universal binary, so it runs natively on Apple Silicon and Intel — no
+Rosetta. If your Mac runs macOS 15, it runs portman.
 
 ### Why isn't it on the Mac App Store?
 
