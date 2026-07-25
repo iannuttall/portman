@@ -25,7 +25,7 @@ If you run one dev server at a time, you don't need this.
 ## Quick start
 
 [Download the DMG](https://github.com/iannuttall/portman/releases/latest) and drag it to
-Applications. Requires **macOS 15 or later**.
+Applications. Requires **macOS 15 or later on Apple Silicon**.
 
 Press **⌥⌘P** from anywhere, or click the plug in the menu bar, and start typing.
 
@@ -199,6 +199,13 @@ documents the traps, and several are subtle enough to reintroduce by accident.
 No, and it doesn't ask for it. It reads what your own user can see. Processes owned by root or
 another user appear in the list, but their metrics show `—`, and killing one fails with a
 message saying so rather than pretending it worked.
+
+### Does it run on Intel Macs?
+
+Not as shipped — the release build is Apple Silicon only, which keeps the download at 3 MB
+instead of 6. Nothing in the code is architecture-specific, though, so a universal build is a
+one-line change (`swift build -c release --arch arm64 --arch x86_64`) and it compiles clean.
+If you're on an Intel Mac running Sequoia, open an issue and I'll ship universal builds.
 
 ### Why isn't it on the Mac App Store?
 

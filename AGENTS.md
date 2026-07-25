@@ -162,6 +162,31 @@ Several bugs here were only visible when the built app was actually launched —
 failure and a hardened-runtime failure both passed every build check and appeared only at
 runtime. Don't claim something works because it compiles.
 
+## Bundle Size
+
+The release bundle is ~4.7 MB, ~3.3 MB compressed into the DMG. Three build steps keep it
+there, all in `build-app.sh` and all before signing, since `codesign` seals the bytes:
+
+`strip -x` on the main binary. A SwiftPM release build leaves the full symbol table behind —
+over half the executable, and nothing reads it at runtime. `-x` drops local symbols only, so
+public frames still symbolicate in a crash report.
+
+Sparkle's `Headers`, `PrivateHeaders` and `Modules` are deleted. They're what you'd compile
+against; a shipped app linked at build time and never opens them.
+
+Sparkle is thinned to the app's architecture. **The app is deliberately Apple Silicon only** —
+not for any technical reason, since nothing in the codebase is architecture-specific and
+`swift build -c release --arch arm64 --arch x86_64` compiles clean. It's that a universal
+build costs 2.3 MB against a 4.7 MB bundle, and Intel Macs on Sequoia are a shrinking
+audience for a developer tool. Going universal is a one-line change, and the thinning step
+reads the arch off the built binary rather than hardcoding `arm64` precisely so that flipping
+it doesn't silently strip the half a universal build needs. If it flips, the README and
+ian.is/portman both claim Apple Silicon and would need updating too.
+
+What's left is mostly the icon: `Assets.car` (1.45 MB, the layered icon macOS 26 renders
+itself) plus `AppIcon.icns` (0.58 MB, for macOS 15–25). Both eras have to ship, so the icon is
+~2 MB and that's the floor unless the minimum target moves to macOS 26.
+
 ## Releasing
 
 `scripts/release.sh` builds, signs, runs a pre-flight, produces a DMG, notarises, staples and

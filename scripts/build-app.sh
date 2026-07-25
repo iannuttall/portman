@@ -35,6 +35,12 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
 cp "$BUILD_DIR/portman" "$MACOS_DIR/$APP_NAME"
 
+# SwiftPM leaves the full symbol table in a release build — it's over half the
+# binary and nothing at runtime reads it. `-x` drops local symbols only, so
+# crash reports still symbolicate the public frames. Must run before codesign,
+# which seals the bytes.
+strip -x "$MACOS_DIR/$APP_NAME"
+
 # Sparkle ships as a framework, so it has to be embedded and the binary told to
 # look for it inside the bundle. SwiftPM links it but doesn't build app bundles.
 SPARKLE_FRAMEWORK="$(find "$ROOT/.build/artifacts" -name "Sparkle.framework" -type d -path "*macos*" | head -1)"
@@ -55,6 +61,30 @@ sign () {
 if [ -n "$SPARKLE_FRAMEWORK" ]; then
   cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
   install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/$APP_NAME"
+
+  # Sparkle's XCFramework ships the headers you'd compile against. A shipped app
+  # links at build time and never reads them, so they're a quarter of a megabyte
+  # of C in the download. Removed before signing so the seal covers what's left.
+  for dev in Headers PrivateHeaders Modules; do
+    rm -rf "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/$dev" \
+           "$FRAMEWORKS_DIR/Sparkle.framework/$dev"
+  done
+
+  # That slice is fat (Intel + Apple Silicon) but SwiftPM builds the app for the
+  # host arch alone, so the Intel half is a megabyte that can never execute.
+  # Thin it to whatever the app actually is, and leave it alone if the app is
+  # ever built universal — deriving the arch means this can't silently strip the
+  # half a future universal build needs.
+  APP_ARCHS="$(lipo -archs "$MACOS_DIR/$APP_NAME")"
+
+  if [ "$(printf '%s' "$APP_ARCHS" | wc -w)" -eq 1 ]; then
+    while IFS= read -r macho; do
+      # Only fat files have something to drop; everything else lipo rejects.
+      if [ "$(lipo -archs "$macho" 2>/dev/null | wc -w)" -gt 1 ]; then
+        lipo "$macho" -thin "$APP_ARCHS" -output "$macho.thin" && mv "$macho.thin" "$macho"
+      fi
+    done < <(find "$FRAMEWORKS_DIR/Sparkle.framework" -type f -perm -u+x)
+  fi
 
   # Signed innermost first: the XPC services and helpers are code in their own
   # right, and signing the framework before them invalidates its seal.
