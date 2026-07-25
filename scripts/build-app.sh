@@ -65,12 +65,38 @@ else
   echo "warning: Sparkle.framework not found — the build will have no updater" >&2
 fi
 
-if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
-  cp "$ROOT/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
-  ICON_ENTRY="  <key>CFBundleIconFile</key>
+# Compiles Resources/AppIcon.icon (an Icon Composer document) with actool.
+#
+# actool emits both halves from that one source: Assets.car carries the layered
+# icon that macOS 26 lights and masks itself, and a generated AppIcon.icns covers
+# macOS 15 and earlier, which do neither. That's why there is no hand-drawn icon
+# in this repo any more — one source, both eras.
+ICON_ENTRY=""
+
+if [ -d "$ROOT/Resources/AppIcon.icon" ]; then
+  ACTOOL_OUT="$ROOT/.build/icon"
+  mkdir -p "$ACTOOL_OUT"
+
+  if xcrun actool "$ROOT/Resources/AppIcon.icon" \
+      --compile "$ACTOOL_OUT" \
+      --platform macosx \
+      --minimum-deployment-target 15.0 \
+      --app-icon AppIcon \
+      --output-partial-info-plist "$ACTOOL_OUT/partial.plist" \
+      --errors --warnings > "$ACTOOL_OUT/actool.log" 2>&1; then
+
+    [ -f "$ACTOOL_OUT/Assets.car" ] && cp "$ACTOOL_OUT/Assets.car" "$RESOURCES_DIR/Assets.car"
+    [ -f "$ACTOOL_OUT/AppIcon.icns" ] && cp "$ACTOOL_OUT/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+
+    # CFBundleIconName points at the asset catalog entry (macOS 26 uses this),
+    # CFBundleIconFile at the .icns (everything older).
+    ICON_ENTRY="  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundleIconName</key>
   <string>AppIcon</string>"
-else
-  ICON_ENTRY=""
+  else
+    echo "warning: actool failed — see $ACTOOL_OUT/actool.log; building without an icon" >&2
+  fi
 fi
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST

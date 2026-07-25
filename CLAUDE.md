@@ -100,6 +100,20 @@ zero.
 **Kill reports failure.** `kill(2)` returns EPERM for processes you don't own. Animating
 the row away regardless is a lie — the server is still there and returns on the next scan.
 
+## Icon
+
+`Resources/AppIcon.icon` is an Icon Composer document — `icon.json` plus the SVG
+layers. `build-app.sh` compiles it with `actool`, which emits both halves from that
+one source: `Assets.car` carries the layered icon that macOS 26 masks and lights
+itself, and a generated `AppIcon.icns` covers macOS 15 and earlier, which do
+neither. `CFBundleIconName` points at the first, `CFBundleIconFile` at the second.
+
+Don't hand-draw an `.icns`. An earlier version did, and it was wrong twice over:
+macOS 26 puts legacy icons in its own container without masking them, so a
+self-drawn squircle showed as a squircle inside a squircle with a grey ring, while
+a full-bleed square showed as a square. Both symptoms disappear once the system is
+given layers to work with.
+
 ## Conventions
 
 4-space indent. No force unwraps. `guard` for early exit. Comments explain *why*, not
