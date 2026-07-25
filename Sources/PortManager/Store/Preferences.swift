@@ -31,6 +31,7 @@ enum Preferences {
         static let reduceMotion = "reduceMotion"
         static let rowDensity = "rowDensity"
         static let cloudflaredPath = "cloudflaredPath"
+        static let rewriteTunnelHost = "rewriteTunnelHost"
     }
 
     // MARK: Visibility
@@ -136,6 +137,18 @@ enum Preferences {
                 ?? AppLauncher.installed(.editor).first?.id
         }
         set { defaults.set(newValue, forKey: Key.editorBundleID) }
+    }
+
+    /// Sends `Host: localhost:<port>` to the local server instead of the
+    /// `*.trycloudflare.com` hostname.
+    ///
+    /// On by default because without it most dev servers reject the request outright:
+    /// Vite answers "This host is not allowed", and Next and Astro have equivalent
+    /// checks. Turn it off if the app builds absolute URLs from the Host header and
+    /// you need those to be the public hostname.
+    static var rewriteTunnelHost: Bool {
+        get { defaults.object(forKey: Key.rewriteTunnelHost) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.rewriteTunnelHost) }
     }
 
     /// Overrides the search paths when cloudflared lives somewhere unusual.

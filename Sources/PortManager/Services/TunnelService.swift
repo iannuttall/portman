@@ -74,6 +74,18 @@ actor TunnelService {
         return String(line[range])
     }
 
+    /// Note the `=` form: cloudflared rejects `--http-host-header <value>` as a
+    /// separate argument and prints its help instead of starting.
+    static func arguments(for port: Int) -> [String] {
+        var arguments = ["tunnel", "--url", "http://localhost:\(port)"]
+
+        if Preferences.rewriteTunnelHost {
+            arguments.append("--http-host-header=localhost:\(port)")
+        }
+
+        return arguments
+    }
+
     // MARK: - Lifecycle
 
     /// Kills tunnels left behind by a previous run.
@@ -99,7 +111,7 @@ actor TunnelService {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = ["tunnel", "--url", "http://localhost:\(port)"]
+        process.arguments = Self.arguments(for: port)
 
         let pipe = Pipe()
         process.standardOutput = pipe

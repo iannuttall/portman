@@ -197,6 +197,7 @@ private struct AppsSettings: View {
     @State private var editor = Preferences.editorBundleID
     @State private var browser = Preferences.browserBundleID
     @State private var cloudflaredPath = Preferences.cloudflaredPath ?? ""
+    @State private var rewriteHost = Preferences.rewriteTunnelHost
 
     var body: some View {
         Form {
@@ -249,6 +250,15 @@ private struct AppsSettings: View {
                 TextField("Custom cloudflared path", text: $cloudflaredPath)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { Preferences.cloudflaredPath = cloudflaredPath }
+
+                Toggle("Send requests as localhost", isOn: $rewriteHost)
+                    .onChange(of: rewriteHost) { _, newValue in
+                        Preferences.rewriteTunnelHost = newValue
+                    }
+
+                Text("Dev servers reject unknown hostnames — Vite answers \"This host is not allowed\". This sends Host: localhost:<port> so they accept the request without you editing allowedHosts. Turn it off only if the app needs to see the public hostname.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Text("Sharing opens a Cloudflare quick tunnel. The link is public and unauthenticated, and closes when you stop it or quit.")
                     .font(.caption)
