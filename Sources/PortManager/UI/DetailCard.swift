@@ -52,6 +52,10 @@ struct DetailCard: View {
                 .fill(Theme.Colour.chipFill.opacity(0.6))
         )
         .task(id: entry.id) {
+            // Expanding a row is the one moment worth re-checking: the reading in
+            // the card should be current, not whatever was true when the server
+            // first appeared in the list.
+            store.recheckHealth(for: entry)
             await loadPreview()
         }
     }

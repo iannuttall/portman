@@ -136,8 +136,12 @@ struct RootView: View {
 
             Divider()
 
-            Button("Settings…") { SettingsWindow.shared.show(store: store) }
-                .keyboardShortcut(",")
+            Button("Settings…") {
+                // The panel outranks every ordinary window, so it has to go first.
+                dismiss()
+                SettingsWindow.shared.show(store: store)
+            }
+            .keyboardShortcut(",")
 
             Button("Quit Port Manager") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")

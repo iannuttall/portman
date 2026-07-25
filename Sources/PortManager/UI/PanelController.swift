@@ -376,6 +376,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     @objc private func openSettings() {
+        close()
         SettingsWindow.shared.show(store: store)
     }
 

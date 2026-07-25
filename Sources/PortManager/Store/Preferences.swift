@@ -71,10 +71,10 @@ enum Preferences {
         set { defaults.set(newValue, forKey: Key.refreshInterval) }
     }
 
-    /// Off by default while we isolate the remaining flicker. Turning it on brings
-    /// back the status code, response time, page title and hung-server detection.
+    /// Each port is checked once when it first appears, not on every scan — repeated
+    /// probing was what made the list flicker.
     static var healthProbeEnabled: Bool {
-        get { defaults.object(forKey: Key.healthProbeEnabled) as? Bool ?? false }
+        get { defaults.object(forKey: Key.healthProbeEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.healthProbeEnabled) }
     }
 

@@ -115,6 +115,13 @@ final class ServerStore {
     /// scan confirms it, so a killed server doesn't flicker back into the list.
     @ObservationIgnored private var recentlyKilled: [Int: Date] = [:]
 
+    /// Health results, kept by port across scans.
+    ///
+    /// A scan produces entries with no health, so without this the probe would run
+    /// again every cycle — which is exactly what made the list flicker. A port is
+    /// checked once when it first appears, and again only on an explicit refresh.
+    @ObservationIgnored private var healthByPort: [Int: HealthReport] = [:]
+
     private static let openInterval: TimeInterval = 2
     private static let killGracePeriod: TimeInterval = 6
 
@@ -267,6 +274,9 @@ final class ServerStore {
     func refresh(force: Bool = false) {
         if isScanning && !force { return }
 
+        // An explicit refresh re-checks health; the automatic poll does not.
+        if force { healthByPort.removeAll() }
+
         scanTask?.cancel()
         scanTask = Task { [weak self] in
             guard let self else { return }
@@ -317,30 +327,49 @@ final class ServerStore {
             if let root = enriched[index].project?.path {
                 enriched[index].git = gitByRoot[root]
             }
+
+            enriched[index].health = healthByPort[enriched[index].port]
         }
 
         pruneRecentlyKilled()
+        pruneHealth(keeping: Set(enriched.map(\.port)))
         commit(enriched)
 
-        // Probing runs off the scan cycle entirely rather than being awaited here.
+        // Probing runs off the scan cycle, and only for ports we haven't checked yet.
         //
-        // A wedged server costs the full timeout to detect, and with several of them
-        // a scan took longer than the 2s poll interval — so the app was permanently
-        // mid-scan and everything it touched felt sluggish.
+        // Awaiting it here made a scan outlast the 2s poll whenever a few servers
+        // were wedged, and re-checking known ports every cycle rewrote the list
+        // continuously.
         guard healthProbeEnabled else { return }
+
+        let unchecked = enriched.filter {
+            healthByPort[$0.port] == nil && $0.kind != .system && $0.kind != .database
+        }
+
+        guard !unchecked.isEmpty else { return }
 
         probeTask?.cancel()
         probeTask = Task { [weak self] in
-            await self?.probeHealth(for: enriched)
+            await self?.probe(ports: unchecked.map(\.port))
         }
     }
 
-    private func probeHealth(for enriched: [ServerEntry]) async {
-        let probeable = enriched.filter { $0.kind != .system && $0.kind != .database }
-        guard !probeable.isEmpty else { return }
+    /// Re-checks a single port on demand — used when a row is expanded, so the card
+    /// shows something current rather than whatever was true when it first appeared.
+    func recheckHealth(for entry: ServerEntry) {
+        guard healthProbeEnabled else { return }
 
-        let reports = await healthProbe.probe(ports: probeable.map(\.port))
+        Task { [weak self] in
+            await self?.healthProbe.invalidate(port: entry.port)
+            await self?.probe(ports: [entry.port])
+        }
+    }
+
+    private func probe(ports: [Int]) async {
+        let reports = await healthProbe.probe(ports: ports)
         guard !Task.isCancelled, !reports.isEmpty else { return }
+
+        healthByPort.merge(reports) { _, new in new }
 
         var updated = entries
         for index in updated.indices {
@@ -349,11 +378,7 @@ final class ServerStore {
             }
         }
 
-        // The probe is TTL-cached, so most cycles it returns exactly what we already
-        // have. Committing that anyway re-rendered the whole list a second time per
-        // scan for no reason.
         guard updated != entries else { return }
-
         commit(updated)
     }
 
@@ -569,6 +594,10 @@ final class ServerStore {
         withAnimation(animation(Theme.Motion.kill)) {
             entries = entries
         }
+    }
+
+    private func pruneHealth(keeping ports: Set<Int>) {
+        healthByPort = healthByPort.filter { ports.contains($0.key) }
     }
 
     private func pruneRecentlyKilled() {

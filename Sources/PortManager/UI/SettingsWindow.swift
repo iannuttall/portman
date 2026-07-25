@@ -10,10 +10,17 @@ final class SettingsWindow {
 
     private var window: NSWindow?
 
+    /// Brings the settings window up in front of everything.
+    ///
+    /// The panel runs at `.popUpMenu` level, which is above any ordinary window, so
+    /// callers must close the panel first — otherwise this opens behind it and looks
+    /// like nothing happened. `orderFrontRegardless` covers the accessory-app case
+    /// where activation alone doesn't reliably front a window.
     func show(store: ServerStore) {
         if let window {
-            window.makeKeyAndOrderFront(nil)
             NSApp.activate()
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
             return
         }
 
