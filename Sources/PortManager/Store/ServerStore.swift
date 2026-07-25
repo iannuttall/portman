@@ -134,13 +134,33 @@ final class ServerStore {
 
     // MARK: - Derived list
 
-    var visibleEntries: [ServerEntry] {
+    /// Everything the panel could show, before the filter chips and search.
+    var candidateEntries: [ServerEntry] {
         entries
             .filter { !isIgnored($0) }
             .filter { showAllProcesses || !$0.hiddenByDefault }
             .filter { !recentlyKilled.keys.contains($0.port) }
-            .filter { filter.matches($0) }
+    }
+
+    var visibleEntries: [ServerEntry] {
+        let base = candidateEntries
+        let contested = ListShaper.conflictPorts(in: base)
+
+        return base
+            .filter { filter.matches($0, contestedPorts: contested) }
             .filter { ListShaper.matches($0, query: searchText) }
+    }
+
+    /// Count behind each filter chip. Lives here so the chips and the list can't
+    /// disagree about what a filter means.
+    func count(for filter: EntryFilter) -> Int? {
+        guard filter != .all else { return nil }
+
+        let base = candidateEntries
+        let contested = ListShaper.conflictPorts(in: base)
+        let matching = base.filter { filter.matches($0, contestedPorts: contested) }.count
+
+        return matching > 0 ? matching : nil
     }
 
     /// Derived list state, rebuilt when its inputs change rather than on every
@@ -164,7 +184,7 @@ final class ServerStore {
             order: sortOrder
         )
         rows = sections.flatMap(\.rows)
-        conflictPorts = ListShaper.conflictPorts(in: entries.filter { !isIgnored($0) })
+        conflictPorts = ListShaper.conflictPorts(in: candidateEntries)
     }
 
     /// Everything currently listed, for "kill all matching".
@@ -184,7 +204,9 @@ final class ServerStore {
     }
 
     var hasIssues: Bool {
-        visibleEntries.contains { $0.hasIssue }
+        let base = candidateEntries
+        let contested = ListShaper.conflictPorts(in: base)
+        return base.contains { $0.hasIssue || contested.contains($0.port) }
     }
 
     // MARK: - Ignore rules

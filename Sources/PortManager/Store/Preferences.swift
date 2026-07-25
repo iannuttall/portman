@@ -252,13 +252,15 @@ enum EntryFilter: String, CaseIterable, Sendable, Hashable {
         }
     }
 
-    func matches(_ entry: ServerEntry) -> Bool {
+    /// A conflict is a property of the pair, not of either row, so the contested
+    /// ports have to be passed in — an entry can't tell on its own.
+    func matches(_ entry: ServerEntry, contestedPorts: Set<Int> = []) -> Bool {
         switch self {
         case .all: return true
         case .dev: return entry.kind == .dev
         case .docker: return entry.kind == .docker
         case .system: return entry.kind == .system || entry.kind == .database
-        case .issues: return entry.hasIssue
+        case .issues: return entry.hasIssue || contestedPorts.contains(entry.port)
         }
     }
 }

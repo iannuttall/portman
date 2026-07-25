@@ -83,7 +83,7 @@ struct RootView: View {
                 FilterChip(
                     label: filter.label,
                     isActive: store.filter == filter,
-                    count: count(for: filter)
+                    count: store.count(for: filter)
                 ) {
                     withAnimation(store.animation(Theme.Motion.listUpdate)) {
                         store.filter = store.filter == filter && filter != .all ? .all : filter
@@ -93,18 +93,6 @@ struct RootView: View {
 
             Spacer(minLength: 0)
         }
-    }
-
-    private func count(for filter: EntryFilter) -> Int? {
-        guard filter != .all else { return nil }
-
-        let matching = store.entries
-            .filter { !store.isIgnored($0) }
-            .filter { store.showAllProcesses || !$0.hiddenByDefault }
-            .filter { filter.matches($0) }
-            .count
-
-        return matching > 0 ? matching : nil
     }
 
     private var optionsMenu: some View {

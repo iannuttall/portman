@@ -22,6 +22,7 @@ struct ServerRowModel: Identifiable, Hashable, Sendable {
 struct ServerSection: Identifiable, Hashable, Sendable {
     enum Style: String, Sendable, Hashable {
         case pinned
+        case conflict
         case stale
         case orphan
         case main
@@ -239,12 +240,38 @@ enum ListShaper {
             )
 
         case .smart:
+            // Contested ports come first and are pulled out of the main list.
+            //
+            // A `conflict` chip on a row tells you there's a clash but not what with,
+            // and under any sort other than by port the rivals scatter. Sitting them
+            // together, always ordered by port, is what makes the choice obvious —
+            // you compare the two candidates side by side and kill one.
+            let contested = conflictPorts(in: rest)
+            let conflicting = rest.filter { contested.contains($0.port) }
+            let uncontested = rest.filter { !contested.contains($0.port) }
+
+            // One section per contested port. The port becomes the heading and the
+            // rivals sit underneath it, so the comparison you have to make — which
+            // of these two do I keep — is the thing on screen.
+            for port in Set(conflicting.map(\.port)).sorted() {
+                let rivals = conflicting.filter { $0.port == port }
+
+                sections.append(
+                    ServerSection(
+                        id: "conflict:\(port)",
+                        title: "Conflict on :\(port)",
+                        style: .conflict,
+                        rows: folded(rivals, order: .port)
+                    )
+                )
+            }
+
             // Abandoned servers pile up — nine dead Astro temp processes drown out
             // the three you're actually working on. They keep their own collapsed
             // sections; everything live stays flat.
-            let stale = rest.filter { $0.state == .staleWorktree }
-            let orphans = rest.filter { $0.state == .orphan }
-            let live = rest.filter { $0.state == .active }
+            let stale = uncontested.filter { $0.state == .staleWorktree }
+            let orphans = uncontested.filter { $0.state == .orphan }
+            let live = uncontested.filter { $0.state == .active }
 
             if !live.isEmpty {
                 sections.append(

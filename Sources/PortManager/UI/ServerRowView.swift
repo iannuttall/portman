@@ -98,7 +98,8 @@ struct ServerRowView: View {
             // Only what genuinely needs attention earns a chip. Framework and port
             // count moved to the quiet line below; orphan and stale are already
             // stated by the section they sit in.
-            if isConflicted {
+            // Hidden inside a "Conflict on :3000" section, which already says it.
+            if isConflicted, showsStateChip {
                 Chip(
                     text: "conflict",
                     tint: Theme.Colour.hung,
