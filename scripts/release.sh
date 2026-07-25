@@ -44,7 +44,13 @@ codesign --verify --deep --strict --verbose=1 "$APP_DIR"
 # Deliberately NOT spctl --assess here: an app that is signed but not yet notarized
 # always reports "rejected / source=Unnotarized Developer ID", so gating on it would
 # abort every release before it could be notarized. That check belongs after stapling.
-if ! codesign -d --verbose=2 "$APP_DIR" 2>&1 | grep -q "flags=.*runtime"; then
+#
+# Captured, not piped. `grep -q` exits the moment it matches, which kills codesign
+# with SIGPIPE, and `pipefail` reports that as a failed pipeline — so piping here
+# fails the check precisely when the flag IS set.
+SIGN_INFO="$(codesign -d --verbose=2 "$APP_DIR" 2>&1 || true)"
+
+if ! printf '%s' "$SIGN_INFO" | grep -q "flags=.*runtime"; then
   echo "error: hardened runtime is not set — notarization would be rejected" >&2
   exit 1
 fi
@@ -84,7 +90,7 @@ else
 fi
 
 echo "==> Signing the update for Sparkle"
-SIGN_UPDATE="$(find "$ROOT/.build/artifacts" -name "sign_update" -type f | head -1)"
+SIGN_UPDATE="$(find "$ROOT/.build/artifacts" -name "sign_update" -type f -print -quit)"
 
 ED_SIGNATURE="PASTE_SIGNATURE"
 

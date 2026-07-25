@@ -57,7 +57,7 @@ strip -x "$MACOS_DIR/$APP_NAME"
 
 # Sparkle ships as a framework, so it has to be embedded and the binary told to
 # look for it inside the bundle. SwiftPM links it but doesn't build app bundles.
-SPARKLE_FRAMEWORK="$(find "$ROOT/.build/artifacts" -name "Sparkle.framework" -type d -path "*macos*" | head -1)"
+SPARKLE_FRAMEWORK="$(find "$ROOT/.build/artifacts" -name "Sparkle.framework" -type d -path "*macos*" -print -quit)"
 
 # Hardened runtime enforces library validation, which requires every loaded
 # framework to share the app's Team ID. Ad-hoc signatures have no Team ID, so
