@@ -26,9 +26,17 @@ a single `Kill all` — instead of burying the three projects you actually care 
 **It understands Docker.** Forwarded ports resolve back to the container, compose project, service
 and working directory, and the action is `Stop container` rather than killing Docker Desktop.
 
+**It makes port conflicts decidable.** When two things hold the same port, they get their own
+heading — `Conflict on :3000` — with the rivals listed underneath and always ordered by port. The
+comparison you actually have to make is the thing on screen.
+
+**It tells you who can reach it.** Every row knows whether it's bound to loopback or to a real
+interface, so you can see at a glance that your Docker Postgres is reachable by anyone on the
+network you just joined.
+
 ## Using it
 
-Click the menu bar icon and start typing. Search matches ports, project names, frameworks, paths,
+Press **⌥⌘P** from anywhere, or click the menu bar icon, and start typing. Search matches ports, project names, frameworks, paths,
 git branches and page titles.
 
 | | |
@@ -40,6 +48,7 @@ git branches and page titles.
 | `⌘C` | copy the local URL |
 | `⌘⌫` | kill the selected server |
 | `esc` | collapse, then clear the search, then close |
+| `⌥⌘P` | open the panel from any app |
 
 Wrap a search in slashes to use a regular expression — `/astro.*43[0-9]{2}/` — then hit
 **Kill all N** in the footer. That's "kill by regex" without a separate feature for it.
@@ -86,6 +95,16 @@ Choose your terminal (Ghostty, iTerm, Terminal, WezTerm, Warp, Alacritty, kitty)
 Cursor, Zed, Sublime, Xcode) and browser — only the ones you actually have installed are offered.
 Set the refresh interval, pick what the menu bar shows, and manage ignore rules for noisy ports,
 apps, projects and containers.
+
+## Distribution
+
+Direct download, signed and notarized with a Developer ID — not the Mac App Store.
+
+That isn't a decision to revisit later; it's a constraint. A port manager needs to run `lsof`,
+read other processes' metrics through `libproc`, send signals to processes it doesn't own, shell
+out to `docker`, `git` and `cloudflared`, and read project directories it was never explicitly
+granted. The App Sandbox forbids essentially all of it, and there's no entitlement that opens it
+up. Every tool in this category ships outside the store for the same reason.
 
 ## Install
 
@@ -145,3 +164,7 @@ Core is pure and testable; the UI never shells out.
 Focusing the terminal tab a server runs in uses AppleScript, so macOS asks for Automation access the
 first time. Declining it is fine — the app falls back to opening a new terminal at the project root,
 which is what happens anyway for servers that have outlived their shell.
+
+## License
+
+MIT.
