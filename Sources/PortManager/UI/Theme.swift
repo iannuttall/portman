@@ -9,7 +9,11 @@ enum Theme {
 
     enum Panel {
         static let width: CGFloat = 400
-        static let maxHeight: CGFloat = 560
+        static let maxHeight: CGFloat = 620
+        /// Tall enough that an expanded row — preview included — is never clipped.
+        static let minHeight: CGFloat = 430
+        /// Search field, filter row and footer, i.e. everything that isn't the list.
+        static let chrome: CGFloat = 118
         static let cornerRadius: CGFloat = 12
         /// Gap between the menu bar and the top of the panel.
         static let menuBarGap: CGFloat = 6

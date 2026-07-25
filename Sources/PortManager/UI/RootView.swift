@@ -23,7 +23,7 @@ struct RootView: View {
             Divider().opacity(0.5)
             footer
         }
-        .frame(width: Theme.Panel.width)
+        .frame(width: Theme.Panel.width, alignment: .top)
         .background(PanelBackground())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Panel.cornerRadius))
         .overlay(
@@ -169,7 +169,7 @@ struct RootView: View {
                 }
                 .padding(.vertical, Theme.Space.snug)
             }
-            .frame(maxHeight: Theme.Panel.maxHeight)
+            .frame(maxHeight: .infinity)
             .scrollIndicators(.automatic)
         }
     }
@@ -234,8 +234,9 @@ struct RootView: View {
                     .multilineTextAlignment(.center)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
+        // Fills the list area so the footer stays pinned to the bottom of the panel
+        // instead of floating halfway up it.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, Theme.Space.loose)
     }
 

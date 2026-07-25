@@ -114,7 +114,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        resizeToFit(panel)
+        sizeOnOpen(panel)
         position(panel)
         store.panelDidOpen()
 
@@ -151,23 +151,37 @@ final class PanelController: NSObject, NSWindowDelegate {
             self?.close()
         }
 
+        // Deliberately NOT .intrinsicContentSize. Letting the content drive the
+        // window meant the panel resized whenever the list changed — and because
+        // NSWindow origins are bottom-left, every resize walked it away from the
+        // menu bar. The controller owns the size now; content scrolls inside it.
         let hosting = NSHostingView(rootView: root)
-        hosting.sizingOptions = [.intrinsicContentSize]
+        hosting.sizingOptions = []
+        hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         hostingView = hosting
 
         return panel
     }
 
-    /// The list grows and shrinks as servers come and go, so the panel is resized
-    /// to its content every time it opens rather than pinned to a fixed height.
-    private func resizeToFit(_ panel: NSPanel) {
-        guard let hostingView else { return }
+    /// Chooses the panel height once, when it opens, and then leaves it alone.
+    ///
+    /// The height is estimated from the row count rather than measured, because
+    /// measuring means letting the content drive the window — which is what made the
+    /// panel jump. The floor is deliberately tall enough to show an expanded row
+    /// including its preview, so expanding never leaves the card clipped.
+    private func sizeOnOpen(_ panel: NSPanel) {
+        let rows = store.rows.count
+        let sectionHeaders = store.sections.filter { $0.title != nil }.count
 
-        hostingView.layoutSubtreeIfNeeded()
-        let fitting = hostingView.fittingSize
+        let rowHeight: CGFloat = store.rowDensity == .detailed ? 52 : 44
+        let content = CGFloat(rows) * rowHeight + CGFloat(sectionHeaders) * 30
+        let estimated = Theme.Panel.chrome + content
 
-        let height = min(max(fitting.height, 120), Theme.Panel.maxHeight + 140)
+        let available = (panel.screen ?? NSScreen.main)?.visibleFrame.height ?? Theme.Panel.maxHeight
+        let ceiling = min(Theme.Panel.maxHeight, available - 40)
+        let height = min(max(estimated, Theme.Panel.minHeight), ceiling)
+
         panel.setContentSize(NSSize(width: Theme.Panel.width, height: height))
     }
 
