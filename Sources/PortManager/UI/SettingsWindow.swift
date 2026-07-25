@@ -68,6 +68,8 @@ private struct GeneralSettings: View {
     @State private var launchError: String?
     @State private var refreshInterval = Preferences.refreshInterval
     @State private var menuBarMode = Preferences.menuBarMode
+    @State private var hotKeyEnabled = Preferences.hotKeyEnabled
+    @State private var hotKey = Preferences.hotKey
 
     var body: some View {
         Form {
@@ -93,6 +95,29 @@ private struct GeneralSettings: View {
                 }
 
                 Toggle("Show system ports", isOn: $store.showAllProcesses)
+            }
+
+            Section("Shortcut") {
+                Toggle("Global shortcut", isOn: $hotKeyEnabled)
+                    .onChange(of: hotKeyEnabled) { _, newValue in
+                        Preferences.hotKeyEnabled = newValue
+                        HotKeyCenter.shared.apply()
+                    }
+
+                Picker("Opens the panel", selection: $hotKey) {
+                    ForEach(HotKeyChoice.allCases, id: \.self) { choice in
+                        Text(choice.label).tag(choice)
+                    }
+                }
+                .disabled(!hotKeyEnabled)
+                .onChange(of: hotKey) { _, newValue in
+                    Preferences.hotKey = newValue
+                    HotKeyCenter.shared.apply()
+                }
+
+                Text("Works from any app. If the shortcut does nothing, another app already owns it — pick a different one.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Scanning") {

@@ -32,6 +32,8 @@ enum Preferences {
         static let rowDensity = "rowDensity"
         static let cloudflaredPath = "cloudflaredPath"
         static let rewriteTunnelHost = "rewriteTunnelHost"
+        static let hotKeyEnabled = "hotKeyEnabled"
+        static let hotKey = "hotKey"
     }
 
     // MARK: Visibility
@@ -137,6 +139,18 @@ enum Preferences {
                 ?? AppLauncher.installed(.editor).first?.id
         }
         set { defaults.set(newValue, forKey: Key.editorBundleID) }
+    }
+
+    // MARK: Shortcut
+
+    static var hotKeyEnabled: Bool {
+        get { defaults.object(forKey: Key.hotKeyEnabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.hotKeyEnabled) }
+    }
+
+    static var hotKey: HotKeyChoice {
+        get { HotKeyChoice(rawValue: defaults.string(forKey: Key.hotKey) ?? "") ?? .optionCommandP }
+        set { defaults.set(newValue.rawValue, forKey: Key.hotKey) }
     }
 
     /// Sends `Host: localhost:<port>` to the local server instead of the

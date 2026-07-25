@@ -31,6 +31,11 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         configureStatusItem()
         observeBadge()
+
+        HotKeyCenter.shared.action = { [weak self] in
+            self?.toggle()
+        }
+        HotKeyCenter.shared.apply()
     }
 
     // MARK: - Status item
@@ -69,7 +74,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         case .iconAndCount:
             button.image = symbol
             button.imagePosition = .imageLeading
-            button.title = " \(count)"
+            button.title = String(count)
         case .countOnly:
             button.image = nil
             button.title = "\(count)"
