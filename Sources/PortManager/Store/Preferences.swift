@@ -71,8 +71,10 @@ enum Preferences {
         set { defaults.set(newValue, forKey: Key.refreshInterval) }
     }
 
+    /// Off by default while we isolate the remaining flicker. Turning it on brings
+    /// back the status code, response time, page title and hung-server detection.
     static var healthProbeEnabled: Bool {
-        get { defaults.object(forKey: Key.healthProbeEnabled) as? Bool ?? true }
+        get { defaults.object(forKey: Key.healthProbeEnabled) as? Bool ?? false }
         set { defaults.set(newValue, forKey: Key.healthProbeEnabled) }
     }
 
@@ -99,7 +101,7 @@ enum Preferences {
     }
 
     static var showPageTitles: Bool {
-        get { defaults.object(forKey: Key.showPageTitles) as? Bool ?? true }
+        get { defaults.object(forKey: Key.showPageTitles) as? Bool ?? false }
         set { defaults.set(newValue, forKey: Key.showPageTitles) }
     }
 
