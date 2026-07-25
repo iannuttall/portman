@@ -16,9 +16,12 @@ SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 # version, so it defaults here rather than being passed in per release.
 SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://raw.githubusercontent.com/iannuttall/portman/main/appcast.xml}"
 
-# The updater still stays dormant until a public key is supplied — the app
-# disables it entirely when it sees the REPLACE_ prefix.
-SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-REPLACE_WITH_PUBLIC_ED_KEY}"
+# The EdDSA public key updates are verified against. Public by design — it ships
+# in the Info.plist of every copy — and pinned here for the same reason as the
+# feed URL: changing it invalidates every signature an installed copy will
+# accept. Its private half lives in the login keychain and never enters the repo;
+# `sign_update` reads it from there at release time.
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-nwuSNKWY2YAhvGb8G4DF2Zxmpugdei3TaQekrb2S/vg=}"
 
 APP_DIR="$ROOT/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -81,11 +84,10 @@ if [ -n "$SPARKLE_FRAMEWORK" ]; then
            "$FRAMEWORKS_DIR/Sparkle.framework/$dev"
   done
 
-  # That slice is fat (Intel + Apple Silicon) but SwiftPM builds the app for the
-  # host arch alone, so the Intel half is a megabyte that can never execute.
-  # Thin it to whatever the app actually is, and leave it alone if the app is
-  # ever built universal — deriving the arch means this can't silently strip the
-  # half a future universal build needs.
+  # Sparkle's slice is fat, and so is the app, so this currently no-ops. It stays
+  # because a single-arch build would otherwise carry a megabyte of Sparkle that
+  # can never execute. The arch is read off the built binary rather than
+  # hardcoded, which is what makes it safe to leave here while universal.
   APP_ARCHS="$(lipo -archs "$MACOS_DIR/$APP_NAME")"
 
   if [ "$(printf '%s' "$APP_ARCHS" | wc -w)" -eq 1 ]; then
@@ -227,8 +229,12 @@ sign "$APP_DIR"
 echo "Built $APP_DIR"
 echo "  version $VERSION ($BUILD_NUMBER), bundle $BUNDLE_ID, signed by ${SIGN_IDENTITY}"
 
-if [ "$SPARKLE_FEED_URL" = "REPLACE_WITH_APPCAST_URL" ]; then
-  echo "  updates: disabled (set SPARKLE_FEED_URL and SPARKLE_PUBLIC_KEY to enable)"
-else
-  echo "  updates: $SPARKLE_FEED_URL"
-fi
+case "$SPARKLE_FEED_URL$SPARKLE_PUBLIC_KEY" in
+  *REPLACE_*)
+    echo "  updates: disabled (SPARKLE_FEED_URL or SPARKLE_PUBLIC_KEY is a placeholder)"
+    ;;
+  *)
+    echo "  updates: $SPARKLE_FEED_URL"
+    echo "  verified against key ${SPARKLE_PUBLIC_KEY:0:12}…"
+    ;;
+esac

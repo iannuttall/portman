@@ -216,5 +216,15 @@ URL is baked into every build's Info.plist and cannot move afterwards without or
 everyone on an older version, so it defaults in `build-app.sh` rather than being passed per
 release. (It also means the repo has to stay public.)
 
-Sparkle stays dormant until the build also supplies `SPARKLE_PUBLIC_KEY`. The private signing
-key lives in the keychain and must never enter the repo.
+Update signing is an EdDSA key pair generated once by Sparkle's `generate_keys`. The **public**
+half is pinned as the default `SPARKLE_PUBLIC_KEY` in `build-app.sh` — it ships in every copy's
+Info.plist, so it isn't a secret, and like the feed URL it can't change without invalidating
+every signature an installed copy will accept. The **private** half lives in the login keychain
+and must never enter the repo; `sign_update` reads it from there.
+
+`release.sh` parses the signature out of `sign_update` and interpolates it into the printed
+`<item>` rather than leaving a `PASTE_SIGNATURE` placeholder. Hand-copying it is how you ship an
+update that every installed copy then refuses, having verified it against the wrong bytes.
+
+Losing the private key means no existing install can ever be updated again — they'd each have to
+re-download by hand. It's worth knowing where your keychain backup is before the first release.

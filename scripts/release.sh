@@ -86,11 +86,23 @@ fi
 echo "==> Signing the update for Sparkle"
 SIGN_UPDATE="$(find "$ROOT/.build/artifacts" -name "sign_update" -type f | head -1)"
 
+ED_SIGNATURE="PASTE_SIGNATURE"
+
 if [ -n "$SIGN_UPDATE" ]; then
   # Reads the private key from the keychain — it is never written to the repo.
-  "$SIGN_UPDATE" "$DMG_PATH" || {
-    echo "warning: sign_update failed. Generate keys once with Sparkle's generate_keys." >&2
-  }
+  # It prints the whole attribute pair; pull just the signature out so the item
+  # below is complete. Hand-copying it is how you ship an update that every
+  # installed copy then refuses, having verified it against the wrong bytes.
+  if SIGN_OUTPUT="$("$SIGN_UPDATE" "$DMG_PATH" 2>&1)"; then
+    ED_SIGNATURE="$(printf '%s' "$SIGN_OUTPUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+    [ -n "$ED_SIGNATURE" ] || {
+      ED_SIGNATURE="PASTE_SIGNATURE"
+      echo "warning: could not parse a signature out of: $SIGN_OUTPUT" >&2
+    }
+  else
+    echo "warning: sign_update failed: $SIGN_OUTPUT" >&2
+    echo "         generate keys once with Sparkle's generate_keys." >&2
+  fi
 else
   echo "warning: sign_update not found in Sparkle's artifacts" >&2
 fi
@@ -112,7 +124,7 @@ Add an <item> to appcast.xml, then commit it — that file IS the update feed:
       url="https://github.com/iannuttall/portman/releases/download/v$VERSION/$DMG_NAME"
       length="$SIZE"
       type="application/octet-stream"
-      sparkle:edSignature="PASTE_SIGNATURE" />
+      sparkle:edSignature="$ED_SIGNATURE" />
   </item>
 
 SUMMARY
