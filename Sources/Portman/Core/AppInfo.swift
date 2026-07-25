@@ -20,4 +20,10 @@ enum AppInfo {
     static var cacheNamespace: String {
         Bundle.main.bundleIdentifier ?? "is.ian.portman"
     }
+
+    /// How the app identifies itself when probing a port. This lands in other
+    /// people's dev server logs, so it names the app that made the request.
+    static var userAgent: String {
+        "\(displayName)/\(version)"
+    }
 }

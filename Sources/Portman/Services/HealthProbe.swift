@@ -228,7 +228,7 @@ actor HealthProbe {
             timeoutInterval: context.timeout
         )
         request.httpMethod = "GET"
-        request.setValue("PortManager/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
         let clock = ContinuousClock()
@@ -604,7 +604,7 @@ private enum SocketExchange {
 
         let request = "GET / HTTP/1.1\r\n"
             + "Host: \(loopback.urlHost):\(port)\r\n"
-            + "User-Agent: PortManager/1.0\r\n"
+            + "User-Agent: \(AppInfo.userAgent)\r\n"
             + "Accept: */*\r\n"
             + "Connection: close\r\n\r\n"
 
