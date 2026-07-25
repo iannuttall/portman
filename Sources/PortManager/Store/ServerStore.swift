@@ -53,6 +53,10 @@ final class ServerStore {
     // Display preferences live here rather than being read from UserDefaults inside
     // view bodies, so toggling one updates the panel immediately.
 
+    var rowDensity: RowDensity = Preferences.rowDensity {
+        didSet { Preferences.rowDensity = rowDensity }
+    }
+
     var showMetrics: Bool = Preferences.showMetrics {
         didSet { Preferences.showMetrics = showMetrics }
     }
@@ -103,6 +107,7 @@ final class ServerStore {
 
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var messageTask: Task<Void, Never>?
+    @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var isPanelOpen = false
 
@@ -317,10 +322,16 @@ final class ServerStore {
         pruneRecentlyKilled()
         commit(enriched)
 
-        // Health probes run after the list is on screen — a wedged server takes
-        // the full timeout to detect, and the list must not wait for it.
-        if healthProbeEnabled {
-            await probeHealth(for: enriched)
+        // Probing runs off the scan cycle entirely rather than being awaited here.
+        //
+        // A wedged server costs the full timeout to detect, and with several of them
+        // a scan took longer than the 2s poll interval — so the app was permanently
+        // mid-scan and everything it touched felt sluggish.
+        guard healthProbeEnabled else { return }
+
+        probeTask?.cancel()
+        probeTask = Task { [weak self] in
+            await self?.probeHealth(for: enriched)
         }
     }
 

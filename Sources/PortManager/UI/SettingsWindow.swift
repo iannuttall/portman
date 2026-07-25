@@ -132,8 +132,22 @@ private struct DisplaySettings: View {
 
     var body: some View {
         Form {
+            Section {
+                Picker("Rows", selection: $store.rowDensity) {
+                    ForEach(RowDensity.allCases, id: \.self) { density in
+                        Text(density.label).tag(density)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(store.rowDensity.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("In each row") {
                 Toggle("CPU and uptime", isOn: $store.showMetrics)
+                    .disabled(store.rowDensity == .simple)
                 Toggle("CPU history graph", isOn: $store.showSparklines)
                     .disabled(!store.showMetrics)
                 Toggle("Git branch", isOn: $store.showGitBranch)

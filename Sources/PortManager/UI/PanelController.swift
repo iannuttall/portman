@@ -171,6 +171,31 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.setContentSize(NSSize(width: Theme.Panel.width, height: height))
     }
 
+    /// Keeps the top edge under the status item, whatever the current height is.
+    private func pinTop(of panel: NSPanel) {
+        guard
+            let button = statusItem.button,
+            let buttonWindow = button.window,
+            let screen = buttonWindow.screen ?? NSScreen.main
+        else {
+            return
+        }
+
+        let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+        let visible = screen.visibleFrame
+        let size = panel.frame.size
+
+        var origin = NSPoint(
+            x: panel.frame.origin.x,
+            y: buttonRect.minY - size.height - Theme.Panel.menuBarGap
+        )
+
+        origin.y = max(origin.y, visible.minY + 8)
+
+        guard abs(origin.y - panel.frame.origin.y) > 0.5 else { return }
+        panel.setFrameOrigin(origin)
+    }
+
     /// Drops the panel under the status item, nudged back on screen if the item
     /// sits near the right edge.
     private func position(_ panel: NSPanel) {
@@ -298,7 +323,19 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        close()
+        // Menus opened from inside the panel (the sort/group menu, a context menu)
+        // take key while the panel is still meant to be up. Only the outside-click
+        // monitor and Esc dismiss it.
+    }
+
+    /// Re-pins the top edge whenever the content height changes.
+    ///
+    /// `NSWindow` origins are bottom-left, so a panel that grows — expanding a row,
+    /// showing the confirmation bar — pushes its own top edge upward and walks away
+    /// from the menu bar. Anchoring the top on every resize keeps it put.
+    func windowDidResize(_ notification: Notification) {
+        guard let panel, panel.isVisible else { return }
+        pinTop(of: panel)
     }
 
     // MARK: - Right-click menu

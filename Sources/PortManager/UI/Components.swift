@@ -39,21 +39,26 @@ struct StatusDot: View {
 // MARK: - Chip
 
 /// Small pill used for frameworks, Docker, and state callouts.
+///
+/// A filled chip draws its label on a solid tint rather than tinted text on a 14%
+/// wash — yellow-on-wash was illegible against the panel material in both light
+/// and dark. `help` is required for state chips so "orphan" can explain itself.
 struct Chip: View {
     let text: String
-    var tint: Color = .secondary
-    var filled = false
+    var tint: Color?
+    var help: String?
 
     var body: some View {
         Text(text)
             .font(Theme.Typography.badge)
-            .foregroundStyle(filled ? tint : .secondary)
+            .foregroundStyle(tint == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.white))
             .padding(.horizontal, 5)
             .padding(.vertical, 1.5)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.chip - 2)
-                    .fill(filled ? tint.opacity(0.14) : Theme.Colour.chipFill)
+                    .fill(tint ?? Theme.Colour.chipFill)
             )
+            .help(help ?? text)
     }
 }
 

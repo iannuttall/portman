@@ -152,25 +152,60 @@ struct DetailCard: View {
     }
 
     private var statStrip: some View {
-        HStack(alignment: .top, spacing: Theme.Space.loose) {
-            Stat(label: "CPU", value: entry.metrics?.cpuPercent.map(Format.cpu))
-            Stat(label: "Memory", value: entry.metrics?.residentBytes.map(Format.memory))
-            Stat(label: "Uptime", value: entry.metrics?.uptime.map(Format.uptime))
-            Stat(label: "Energy", value: entry.metrics?.energyLevel?.label)
-            Stat(label: "PID", value: entry.primaryPID.map { "\($0)" })
+        HStack(alignment: .top, spacing: Theme.Space.regular) {
+            Stat(label: "CPU", value: entry.metrics?.cpuPercent.map(Format.cpu), width: 52)
+            Stat(label: "Memory", value: entry.metrics?.residentBytes.map(Format.memory), width: 66)
+            Stat(label: "Uptime", value: entry.metrics?.uptime.map(Format.uptime), width: 66)
+            Stat(label: "Energy", value: entry.metrics?.energyLevel?.label, width: 52)
+            Stat(label: "PID", value: entry.primaryPID.map { String($0) }, width: 56)
             Spacer(minLength: 0)
         }
     }
 
+    /// The page title gets its own line.
+    ///
+    /// It used to follow the latency on one line, so every probe — where `42ms`
+    /// becomes `70ms` — shifted the title sideways and could change where it wrapped,
+    /// moving a whole line of text. Nothing downstream of a changing number now.
     private func healthRow(_ health: HealthReport) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
+            statusLine(health)
+
+            if health.state == .healthy, let title = health.pageTitle {
+                Text("“\(title)”")
+                    .font(Theme.Typography.meta)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func statusLine(_ health: HealthReport) -> some View {
         HStack(spacing: Theme.Space.snug) {
             switch health.state {
             case .healthy:
-                MetaLabel(
-                    symbol: "checkmark.circle.fill",
-                    text: healthSummary(health),
-                    tint: Theme.Colour.healthy
-                )
+                HStack(spacing: Theme.Space.tight) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.Colour.healthy)
+
+                    if let code = health.statusCode {
+                        Text(verbatim: String(code))
+                            .monospacedDigit()
+                    }
+
+                    if let latency = health.latency {
+                        Text(verbatim: Format.latency(latency))
+                            .monospacedDigit()
+                            // Fixed slot: latency moves on every probe and must not
+                            // push anything along with it.
+                            .frame(width: 46, alignment: .leading)
+                    }
+                }
+                .font(Theme.Typography.meta)
+                .foregroundStyle(Theme.Colour.healthy)
+
             case .hung:
                 MetaLabel(
                     symbol: "exclamationmark.triangle.fill",
@@ -187,14 +222,6 @@ struct DetailCard: View {
 
             Spacer(minLength: 0)
         }
-    }
-
-    private func healthSummary(_ health: HealthReport) -> String {
-        var parts: [String] = []
-        if let code = health.statusCode { parts.append("\(code)") }
-        if let latency = health.latency { parts.append(Format.latency(latency)) }
-        if let title = health.pageTitle { parts.append("“\(title)”") }
-        return parts.isEmpty ? "Responding" : parts.joined(separator: " · ")
     }
 
     /// Says plainly whether anyone else can reach this. The bind address is in every
@@ -344,9 +371,15 @@ struct DetailCard: View {
 
 // MARK: - Stat
 
+/// One labelled figure in the stat strip.
+///
+/// Fixed width on purpose: these values change on every refresh and at different
+/// widths (`447 MB` → `1.2 GB`, `18h 14m` → `1d 3h`). In a plain HStack each one
+/// would shove the rest of the strip sideways.
 private struct Stat: View {
     let label: String
     let value: String?
+    var width: CGFloat = 66
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -357,8 +390,11 @@ private struct Stat: View {
 
             Text(value ?? Format.unavailable)
                 .font(Theme.Typography.metaMono)
+                .monospacedDigit()
                 .foregroundStyle(value == nil ? .tertiary : .primary)
+                .lineLimit(1)
         }
+        .frame(width: width, alignment: .leading)
     }
 }
 

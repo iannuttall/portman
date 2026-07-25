@@ -29,6 +29,7 @@ enum Preferences {
         static let showMetrics = "showMetrics"
         static let showPageTitles = "showPageTitles"
         static let reduceMotion = "reduceMotion"
+        static let rowDensity = "rowDensity"
     }
 
     // MARK: Visibility
@@ -100,6 +101,13 @@ enum Preferences {
     static var showPageTitles: Bool {
         get { defaults.object(forKey: Key.showPageTitles) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.showPageTitles) }
+    }
+
+    /// How much each row shows. Simple is the default: the detail is all still
+    /// there, one click down, rather than on screen at all times.
+    static var rowDensity: RowDensity {
+        get { RowDensity(rawValue: defaults.string(forKey: Key.rowDensity) ?? "") ?? .simple }
+        set { defaults.set(newValue.rawValue, forKey: Key.rowDensity) }
     }
 
     /// Turns off list animations. The list still updates — it just doesn't move
@@ -186,6 +194,27 @@ enum GroupMode: String, CaseIterable, Sendable {
         case .none: return "Flat"
         case .project: return "By project"
         case .kind: return "By kind"
+        }
+    }
+}
+
+enum RowDensity: String, CaseIterable, Sendable {
+    /// Port, name, framework, and anything that's wrong. Nothing else.
+    case simple
+    /// Adds branch, CPU, CPU history, uptime and page title.
+    case detailed
+
+    var label: String {
+        switch self {
+        case .simple: return "Simple"
+        case .detailed: return "Detailed"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .simple: return "Port, project, framework, and anything that needs attention."
+        case .detailed: return "Adds git branch, CPU, uptime and page title to every row."
         }
     }
 }

@@ -37,26 +37,6 @@ struct RootView: View {
         .onChange(of: store.sections.map(\.id)) { _, _ in
             applyDefaultCollapse()
         }
-        .confirmationDialog(
-            confirmationTitle,
-            isPresented: Binding(
-                get: { store.pendingKill != nil },
-                set: { if !$0 { store.cancelPendingKill() } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Kill \(store.pendingKill?.rows.count ?? 0) servers", role: .destructive) {
-                store.confirmPendingKill()
-            }
-            Button("Cancel", role: .cancel) { store.cancelPendingKill() }
-        } message: {
-            Text("This can't be undone.")
-        }
-    }
-
-    private var confirmationTitle: String {
-        guard let pending = store.pendingKill else { return "" }
-        return "Kill \(pending.rows.count) servers \(pending.title)?"
     }
 
     private func applyDefaultCollapse() {
@@ -141,6 +121,12 @@ struct RootView: View {
                 }
             }
 
+            Picker("Rows", selection: $store.rowDensity) {
+                ForEach(RowDensity.allCases, id: \.self) { density in
+                    Text(density.label).tag(density)
+                }
+            }
+
             Divider()
 
             Toggle("Show system ports", isOn: $store.showAllProcesses)
@@ -203,12 +189,16 @@ struct RootView: View {
         }
 
         if !collapsedSections.contains(section.id) {
-            ForEach(section.rows) { row in
+            ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
                 ServerRowView(
                     row: row,
                     isSelected: store.selectedRowID == row.id,
                     isExpanded: store.expandedRowID == row.id,
                     isConflicted: store.conflictPorts.contains(row.entry.port),
+                    // Rows inside an Orphans or Stale section don't repeat what the
+                    // section header already says.
+                    showsStateChip: section.style == .main || section.style == .pinned,
+                    showsTopDivider: index > 0,
                     store: store
                 )
             }
@@ -271,7 +261,46 @@ struct RootView: View {
 
     // MARK: - Footer
 
+    @ViewBuilder
     private var footer: some View {
+        if let pending = store.pendingKill {
+            confirmBar(pending)
+        } else {
+            normalFooter
+        }
+    }
+
+    /// Confirmation lives inside the panel rather than in a `confirmationDialog`.
+    ///
+    /// A dialog is its own window, so presenting it took key away from the panel —
+    /// which dismissed the panel out from under the dialog, and resized it off its
+    /// menu bar anchor on the way back.
+    private func confirmBar(_ pending: ServerStore.PendingKill) -> some View {
+        HStack(spacing: Theme.Space.regular) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.Colour.destructive)
+
+            Text("Kill \(pending.rows.count) servers? This can't be undone.")
+                .font(Theme.Typography.meta)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            ActionButton(label: "Cancel") { store.cancelPendingKill() }
+
+            ActionButton(label: "Kill \(pending.rows.count)", destructive: true) {
+                store.confirmPendingKill()
+            }
+        }
+        .padding(.horizontal, Theme.Space.gutter)
+        .padding(.vertical, Theme.Space.regular)
+        .background(Theme.Colour.destructive.opacity(0.08))
+    }
+
+    private var normalFooter: some View {
         HStack(spacing: Theme.Space.regular) {
             Text(summary)
                 .font(Theme.Typography.meta)

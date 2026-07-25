@@ -9,6 +9,8 @@ struct ServerRowView: View {
     let isSelected: Bool
     let isExpanded: Bool
     let isConflicted: Bool
+    let showsStateChip: Bool
+    let showsTopDivider: Bool
     let store: ServerStore
 
     @State private var isHovered = false
@@ -18,6 +20,12 @@ struct ServerRowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showsTopDivider && !isExpanded {
+                Divider()
+                    .opacity(0.4)
+                    .padding(.horizontal, Theme.Space.comfy)
+            }
+
             header
 
             if isExpanded {
@@ -43,35 +51,31 @@ struct ServerRowView: View {
     // MARK: Header line
 
     private var header: some View {
-        HStack(spacing: Theme.Space.regular) {
+        HStack(spacing: Theme.Space.comfy) {
             StatusDot(entry: entry)
 
-            // verbatim: a port is an identifier, not a quantity — plain
-            // interpolation localises it into "4,321".
-            Text(verbatim: String(entry.port))
-                .font(Theme.Typography.port)
-                .foregroundStyle(.primary)
-                .frame(minWidth: 40, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                nameLine
 
-            VStack(alignment: .leading, spacing: 1) {
-                titleLine
-                metaLine
+                if let meta = metaText {
+                    Text(meta)
+                        .font(Theme.Typography.meta)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(metaHelp)
+                }
             }
 
             Spacer(minLength: Theme.Space.tight)
 
             if isHovered && !isExpanded {
                 quickActions
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
+                    .transition(.opacity)
             }
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
-        .padding(.horizontal, Theme.Space.regular)
-        .padding(.vertical, Theme.Space.regular)
+        .padding(.horizontal, Theme.Space.comfy)
+        .padding(.vertical, 9)
         .contentShape(Rectangle())
         .onTapGesture {
             store.selectedRowID = row.id
@@ -79,97 +83,90 @@ struct ServerRowView: View {
         }
     }
 
-    private var titleLine: some View {
+    private var nameLine: some View {
         HStack(spacing: Theme.Space.snug) {
             Text(entry.title)
                 .font(Theme.Typography.title)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
-            if let badge = entry.badge {
-                Chip(text: badge)
-            }
+            Text(verbatim: ":" + String(entry.port))
+                .font(Theme.Typography.port)
+                .foregroundStyle(Theme.Colour.port)
 
-            if row.portCount > 1 {
-                Chip(text: "+\(row.portCount - 1)")
-                    .help("\(row.portCount) ports belong to this project")
-            }
-
+            // Only what genuinely needs attention earns a chip. Framework and port
+            // count moved to the quiet line below; orphan and stale are already
+            // stated by the section they sit in.
             if isConflicted {
-                Chip(text: "conflict", tint: Theme.Colour.hung, filled: true)
+                Chip(
+                    text: "conflict",
+                    tint: Theme.Colour.hung,
+                    help: "Another process is listening on port \(entry.port) too"
+                )
             }
 
-            if entry.state == .staleWorktree {
-                Chip(text: "stale", tint: Theme.Colour.stale, filled: true)
-            } else if entry.state == .orphan {
-                Chip(text: "orphan", tint: Theme.Colour.orphan, filled: true)
+            if showsStateChip, entry.state == .staleWorktree {
+                Chip(
+                    text: "stale",
+                    tint: Theme.Colour.stale,
+                    help: "The agent worktree this came from has been deleted — safe to kill"
+                )
+            } else if showsStateChip, entry.state == .orphan {
+                Chip(
+                    text: "orphan",
+                    tint: Theme.Colour.orphan,
+                    help: "This server's project folder no longer exists — safe to kill"
+                )
+            }
+
+            if entry.health?.state == .hung {
+                Chip(
+                    text: "not responding",
+                    tint: Theme.Colour.hung,
+                    help: "Holding the port but not answering requests"
+                )
             }
         }
     }
 
-    /// Second line of a row.
+    /// The quiet second line, composed as one string.
     ///
-    /// Every value that changes on a refresh — CPU, uptime — is monospaced-digit and
-    /// given a reserved width. Otherwise `0.0%` becoming `12.4%` reflows the whole
-    /// line every two seconds, which reads as the row twitching.
-    private var metaLine: some View {
-        HStack(spacing: Theme.Space.regular) {
-            if store.showGitBranch, let branch = entry.git?.branch {
-                MetaLabel(
-                    symbol: "arrow.triangle.branch",
-                    text: dirtyBranchLabel(branch, git: entry.git)
-                )
-                .lineLimit(1)
-            }
+    /// Deliberately a single `Text` rather than a row of separately framed values:
+    /// nothing can push anything else around as figures change, and it reads as a
+    /// sentence instead of a dashboard.
+    private var metaText: String? {
+        var parts: [String] = []
 
-            if store.showMetrics, let cpu = entry.metrics?.cpuPercent {
-                HStack(spacing: Theme.Space.tight) {
-                    Text(verbatim: Format.cpu(cpu))
-                        .font(Theme.Typography.meta)
-                        .monospacedDigit()
-                        .foregroundStyle(cpu > 80 ? Theme.Colour.hung : Color.secondary)
-                        .frame(width: 38, alignment: .leading)
-
-                    if store.showSparklines {
-                        // Always occupies its slot, even before there's enough history
-                        // to draw, so the line doesn't jump when the trace appears.
-                        Sparkline(
-                            values: store.cpuTrace(for: row.id),
-                            tint: cpu > 80 ? Theme.Colour.hung : .secondary
-                        )
-                    }
-                }
-            }
-
-            if store.showMetrics, let uptime = entry.metrics?.uptime {
-                Text(verbatim: Format.uptime(uptime))
-                    .font(Theme.Typography.meta)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 52, alignment: .leading)
-            }
-
-            if store.showPageTitles, let title = entry.health?.pageTitle, entry.git?.branch == nil {
-                Text("“\(title)”")
-                    .font(Theme.Typography.meta)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-
-            if entry.health?.state == .hung {
-                MetaLabel(symbol: "exclamationmark.triangle.fill", text: "not responding", tint: Theme.Colour.hung)
-            }
-
-            if entry.exposure == .network {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .help(Exposure.network.label)
-            }
-
-            Spacer(minLength: 0)
+        if store.showGitBranch, let branch = entry.git?.branch {
+            parts.append(dirtyBranchLabel(branch, git: entry.git))
         }
-        .lineLimit(1)
+
+        if let framework = entry.badge {
+            parts.append(framework)
+        }
+
+        if row.portCount > 1 {
+            parts.append("+\(row.portCount - 1) ports")
+        }
+
+        if store.rowDensity == .detailed, store.showMetrics {
+            if let cpu = entry.metrics?.cpuPercent {
+                parts.append(Format.cpu(cpu))
+            }
+        }
+
+        if let uptime = entry.metrics?.uptime {
+            parts.append(Format.uptime(uptime))
+        }
+
+        if store.rowDensity == .detailed, store.showPageTitles,
+           let title = entry.health?.pageTitle {
+            parts.append("“\(title)”")
+        }
+
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
     private func dirtyBranchLabel(_ branch: String, git: GitStatus?) -> String {
@@ -177,28 +174,32 @@ struct ServerRowView: View {
         return "\(branch) •\(count)"
     }
 
+    private func branchHelp(git: GitStatus?) -> String {
+        guard let count = git?.dirtyCount, count > 0 else { return "Git branch" }
+        return "Git branch — \(count) uncommitted change\(count == 1 ? "" : "s")"
+    }
+
+    private var metaHelp: String {
+        var lines: [String] = []
+        if let branch = entry.git?.branch { lines.append("Branch \(branch)") }
+        if let framework = entry.badge { lines.append(framework) }
+        if let uptime = entry.metrics?.uptime { lines.append("Up \(Format.uptime(uptime))") }
+        if entry.exposure == .network { lines.append(Exposure.network.label) }
+        return lines.joined(separator: " · ")
+    }
+
     // MARK: Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 1) {
-            if entry.health?.state != .nonHTTP {
-                IconButton(symbol: "arrow.up.right.square", help: "Open in browser") {
-                    store.open(entry)
-                }
-            }
-
-            IconButton(symbol: "doc.on.doc", help: "Copy URL") {
-                store.copy(store.url(for: entry).absoluteString)
-            }
-
-            IconButton(symbol: "xmark.circle", help: killHelp, destructive: true) {
+        HStack(spacing: Theme.Space.tight) {
+            ActionButton(label: entry.container == nil ? "Kill" : "Stop", destructive: true) {
                 killWithAnimation()
             }
-        }
-    }
 
-    private var killHelp: String {
-        entry.container == nil ? "Kill process" : "Stop container"
+            if entry.health?.state != .nonHTTP {
+                ActionButton(label: "Open") { store.open(entry) }
+            }
+        }
     }
 
     private func killWithAnimation() {

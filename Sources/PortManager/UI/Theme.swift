@@ -67,9 +67,14 @@ enum Theme {
 
     enum Colour {
         static let healthy = Color.green
+        /// The port reads as a link-ish accent, like the reference design.
+        static let port = Color.green
         static let hung = Color.orange
-        static let stale = Color.orange
-        static let orphan = Color.yellow
+        /// Both abandoned states share one colour. Yellow was unreadable against the
+        /// panel material, and "stale" vs "orphan" is a distinction the label already
+        /// makes — it doesn't need a second channel.
+        static let stale = Color(red: 0.72, green: 0.42, blue: 0.05)
+        static let orphan = Color(red: 0.72, green: 0.42, blue: 0.05)
         static let destructive = Color.red
         static let inert = Color.secondary.opacity(0.5)
 
