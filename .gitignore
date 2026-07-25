@@ -1,3 +1,7 @@
 .build/
 dist/
 .DS_Store
+*sparkle*key*
+*private*key*
+*.p12
+*.pem
