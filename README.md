@@ -1,7 +1,5 @@
 <div align="center">
 
-<!-- Two assets rather than one with currentColor: an <img> inherits no CSS, so
-     the mark needs a real light and a real dark file to survive both themes. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/portman-mark-dark.svg">
   <img src=".github/assets/portman-mark.svg" alt="Portman" height="72">
@@ -9,10 +7,10 @@
 
 # Portman
 
-**Every port on your Mac, and what's actually using it.**
+**Find and kill zombie dev servers.**
 
-A menu bar app that names your dev servers by project and framework, spots the ones that have
-quietly died, and kills them in one click.
+A menu bar app that names every dev server on your Mac by project and framework, spots the
+ones that have quietly died, and kills the ones you forgot.
 
 [Download for macOS](https://github.com/iannuttall/portman/releases/latest) ·
 [ian.is/portman](https://ian.is/portman) · MIT licensed
@@ -23,7 +21,7 @@ quietly died, and kills them in one click.
 
 ## Who this is for
 
-People who run a lot of local servers at once — several projects, a few Docker containers, an
+People who run a lot of local servers at once. Several projects, a few Docker containers, an
 agent or two spawning worktrees in the background. The kind of machine where `lsof -i :3000`
 is muscle memory and something is always still running that shouldn't be.
 
@@ -41,14 +39,14 @@ Press **⌥⌘P** from anywhere, or click the plug in the menu bar, and start ty
 Most tools in this category list ports and kill them. That part is easy. These are the parts
 that aren't:
 
-**It knows what your servers are.** Not `node (pid 10791)` — `web :4321`, with the project
+**It knows what your servers are.** Not `node (pid 10791)`, but `web :4321`, with the project
 path, the git branch and its uncommitted count, and the page title of whatever it's serving.
 Frameworks are inferred from `package.json`, lockfiles, Vite's dep cache and the command line:
 Astro, Next.js, TanStack Start, Vite, Remix, SvelteKit, Nuxt, Angular, Expo, Rails, Django,
 FastAPI and more.
 
 **It catches wedged servers.** A dev server that's holding its port but no longer answering
-looks identical to a healthy one everywhere else. Portman probes each port and flags it —
+looks identical to a healthy one everywhere else. Portman probes each port and flags it as
 `alive, but not responding`. That distinction is the difference between "why is 3000 taken"
 and "oh, that one's hung".
 
@@ -56,12 +54,12 @@ and "oh, that one's hung".
 tell which of your six Astro servers is the one you wanted.
 
 **It makes port conflicts decidable.** When two things hold the same port they get their own
-heading — `Conflict on :3000` — with the rivals listed underneath and always ordered by port.
+heading, `Conflict on :3000`, with the rivals listed underneath and always ordered by port.
 The comparison you actually have to make is the thing on screen.
 
 **It knows about your dead ones.** Servers whose project folder has been deleted, and dev
 servers left behind by agent worktrees (Conductor, Claude, Codex), fold into collapsed
-sections with a single `Kill all` — instead of burying the three projects you care about.
+sections with a single `Kill all`, instead of burying the three projects you care about.
 
 **It understands Docker.** Forwarded ports resolve back to the container, compose project,
 service and working directory, and the action is `Stop container` rather than killing Docker
@@ -87,7 +85,7 @@ titles.
 | `⌘⌫` | kill the selected server |
 | `esc` | collapse, then clear the search, then close |
 
-Wrap a search in slashes for a regular expression — `/astro.*43[0-9]{2}/` — then hit
+Wrap a search in slashes for a regular expression, like `/astro.*43[0-9]{2}/`, then hit
 **Kill all N** in the footer. That's "kill by regex", without a separate feature for it.
 
 Sort by port, name, CPU, memory, uptime or most recently started. Group smartly (the default),
@@ -106,7 +104,7 @@ clipboard. Needs `cloudflared`:
 brew install cloudflared
 ```
 
-No Cloudflare account and no DNS setup — quick tunnels are account-free.
+No Cloudflare account and no DNS setup. Quick tunnels are account-free.
 
 Requests reach your dev server with `Host: localhost:<port>`, so Vite, Next and Astro accept
 them instead of answering "This host is not allowed". You don't need to touch `allowedHosts`.
@@ -116,7 +114,7 @@ restart Portman, and you get a new address next time. Portman also kills any tun
 behind by a previous session at launch, so a public URL can never outlive the app that opened
 it.
 
-## Metrics
+## Where the numbers come from
 
 CPU, memory, uptime, thread count and an energy estimate come from `libproc`, sampled in the
 background. No root, no helper tool, no polling `ps` in a loop.
@@ -124,10 +122,10 @@ background. No root, no helper tool, no polling `ps` in a loop.
 Processes owned by another user or by root can't be read, and those show `—` rather than a
 misleading `0`.
 
-## Settings
+## What you can change
 
 Choose your terminal (Ghostty, iTerm, Terminal, WezTerm, Warp, Alacritty, kitty), editor (VS
-Code, Cursor, Zed, Sublime, Xcode) and browser — only the ones you actually have installed are
+Code, Cursor, Zed, Sublime, Xcode) and browser. Only the ones you actually have installed are
 offered.
 
 Rows default to **Simple**: name, port, framework and anything that needs attention. Switch to
@@ -155,13 +153,13 @@ spctl --assess --type execute /Applications/Portman.app
 shasum -a 256 ~/Downloads/portman-*.dmg
 ```
 
-**Or build it yourself** — see below. The build scripts are in this repo too.
+**Or build it yourself.** See below. The build scripts are in this repo too.
 
-## Permissions
+## What macOS will ask you for
 
 Focusing the terminal tab a server runs in uses AppleScript, so macOS asks for Automation
-access the first time. Declining is fine — Portman falls back to opening a new terminal at the
-project root, which is what happens anyway for servers that have outlived their shell.
+access the first time. Declining is fine, and Portman falls back to opening a new terminal
+at the project root, which is what happens anyway for servers that have outlived their shell.
 
 Nothing else requires a permission prompt. There is no privileged helper.
 
@@ -185,7 +183,7 @@ Port discovery uses:
 /usr/sbin/lsof -nP -iTCP -sTCP:LISTEN -F pcLn
 ```
 
-### Layout
+### How the code is organised
 
 ```
 Core/       scanning, project and framework detection, Docker, metrics, git
@@ -196,7 +194,7 @@ UI/         status item, panel, list, detail card, settings
 
 Core is pure and testable; the UI never shells out.
 
-If you're working on this — or pointing an agent at it — read [AGENTS.md](AGENTS.md) first. It
+If you're working on this, or pointing an agent at it, read [AGENTS.md](AGENTS.md) first. It
 documents the traps, and several are subtle enough to reintroduce by accident.
 
 ## Common questions
@@ -209,7 +207,7 @@ message saying so rather than pretending it worked.
 
 ### Does it run on Intel Macs?
 
-Yes. The release is a universal binary, so it runs natively on Apple Silicon and Intel — no
+Yes. The release is a universal binary, so it runs natively on Apple Silicon and Intel, with no
 Rosetta. If your Mac runs macOS 15, it runs Portman.
 
 ### Why isn't it on the Mac App Store?
