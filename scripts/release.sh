@@ -119,9 +119,19 @@ fi
 
 SIZE="$(stat -f%z "$DMG_PATH")"
 
+# The README tells people to compare this against what they downloaded, so it has
+# to exist for every release. Computed here rather than by hand, because a release
+# published without one turns that promise into a lie.
+SHA256="$(shasum -a 256 "$DMG_PATH" | cut -d' ' -f1)"
+
 cat <<SUMMARY
 
 ==> Done: $DMG_PATH  (${SIZE} bytes)
+
+Put this in the GitHub release notes, where the README points people to find it:
+
+  shasum -a 256 $DMG_NAME
+  $SHA256
 
 Add an <item> to appcast.xml, then commit it — that file IS the update feed:
 

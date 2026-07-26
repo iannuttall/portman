@@ -147,11 +147,15 @@ codesign --verify --deep --strict --verbose=2 /Applications/Portman.app
 spctl --assess --type execute /Applications/Portman.app
 ```
 
-**Checksums.** Every release publishes a SHA-256. Compare it against what you downloaded:
+**Checksums.** Run this against the file you downloaded:
 
 ```sh
 shasum -a 256 ~/Downloads/portman-*.dmg
 ```
+
+The expected value is in the
+[release notes](https://github.com/iannuttall/portman/releases/latest) for that version. If the
+two don't match, the file isn't the one I built, so don't open it.
 
 **Or build it yourself.** See below. The build scripts are in this repo too.
 
