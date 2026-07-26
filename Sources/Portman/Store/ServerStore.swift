@@ -145,15 +145,6 @@ final class ServerStore {
             .filter { !recentlyKilled.keys.contains($0.port) }
     }
 
-    var visibleEntries: [ServerEntry] {
-        let base = candidateEntries
-        let contested = ListShaper.conflictPorts(in: base)
-
-        return base
-            .filter { filter.matches($0, contestedPorts: contested) }
-            .filter { ListShaper.matches($0, query: searchText) }
-    }
-
     /// Count behind each filter chip. Lives here so the chips and the list can't
     /// disagree about what a filter means.
     func count(for filter: EntryFilter) -> Int? {
@@ -177,8 +168,22 @@ final class ServerStore {
     private(set) var rows: [ServerRowModel] = []
     private(set) var conflictPorts: Set<Int> = []
 
+    /// What the status item is alerting about, worst first.
+    ///
+    /// Derived from `candidateEntries`, never from the visible rows — searching for one
+    /// project must not make the menu bar claim the other problems went away.
+    private(set) var issues: [ServerIssue] = []
+
     func rebuildDerived() {
-        let visible = visibleEntries
+        // Built once and threaded through. This runs on every keystroke as well as
+        // every scan, and both the conflict fold and the issue digest need the same
+        // unfiltered candidate list.
+        let candidates = candidateEntries
+        let contested = ListShaper.conflictPorts(in: candidates)
+
+        let visible = candidates
+            .filter { filter.matches($0, contestedPorts: contested) }
+            .filter { ListShaper.matches($0, query: searchText) }
 
         sections = ListShaper.sections(
             for: visible,
@@ -187,7 +192,8 @@ final class ServerStore {
             order: sortOrder
         )
         rows = sections.flatMap(\.rows)
-        conflictPorts = ListShaper.conflictPorts(in: candidateEntries)
+        conflictPorts = contested
+        issues = ListShaper.issues(in: candidates, contestedPorts: contested)
     }
 
     /// Everything currently listed, for "kill all matching".
@@ -204,12 +210,6 @@ final class ServerStore {
             .filter { !isIgnored($0) }
             .filter { showAllProcesses || !$0.hiddenByDefault }
             .count
-    }
-
-    var hasIssues: Bool {
-        let base = candidateEntries
-        let contested = ListShaper.conflictPorts(in: base)
-        return base.contains { $0.hasIssue || contested.contains($0.port) }
     }
 
     // MARK: - Ignore rules

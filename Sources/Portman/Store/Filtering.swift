@@ -19,6 +19,37 @@ struct ServerRowModel: Identifiable, Hashable, Sendable {
     var portCount: Int { related.count + 1 }
 }
 
+/// One thing currently worth interrupting someone about, in the form the status item
+/// needs it: what kind, which port, and what to call it.
+struct ServerIssue: Identifiable, Hashable, Sendable {
+    enum Kind: String, Sendable, Hashable {
+        case conflict
+        case stale
+        case orphan
+        case hung
+    }
+
+    let kind: Kind
+    let port: Int
+    let name: String
+
+    /// Stable for as long as it's the same problem, so the status item can tell a new
+    /// issue from one it has already flagged and only pull the eye once per problem.
+    var id: String { "\(kind.rawValue):\(port)" }
+
+    /// Written as a finding rather than a label. This ends up in the status item's
+    /// tooltip, which is the only place the menu bar has room to say what's wrong,
+    /// and "1 issue" would only tell you to go looking for it.
+    var sentence: String {
+        switch kind {
+        case .conflict: return "Port \(port) has more than one listener"
+        case .stale: return "\(name) on \(port) is from a worktree that's been deleted"
+        case .orphan: return "\(name) on \(port) has lost its project folder"
+        case .hung: return "\(name) on \(port) accepts connections but never answers"
+        }
+    }
+}
+
 struct ServerSection: Identifiable, Hashable, Sendable {
     enum Style: String, Sendable, Hashable {
         case pinned
@@ -345,5 +376,38 @@ enum ListShaper {
         }
 
         return Set(seen.filter { $0.value.count > 1 }.keys)
+    }
+
+    // MARK: - Issues
+
+    /// Everything wrong right now, worst first: a contested port breaks the next
+    /// request you make, where an abandoned server only wastes the machine.
+    ///
+    /// At most one issue per port. Both halves of a conflict are the same conflict, and
+    /// a stale worktree holding a contested port is usually the *cause* of that conflict
+    /// — one kill fixes both, so counting it twice would overstate how much is wrong.
+    static func issues(in entries: [ServerEntry], contestedPorts: Set<Int>) -> [ServerIssue] {
+        var issues: [ServerIssue] = []
+        var claimed: Set<Int> = []
+
+        for port in contestedPorts.sorted() {
+            guard let name = entries.first(where: { $0.port == port })?.title else { continue }
+            issues.append(ServerIssue(kind: .conflict, port: port, name: name))
+            claimed.insert(port)
+        }
+
+        for entry in entries.sorted(by: { $0.port < $1.port }) where !claimed.contains(entry.port) {
+            let kind: ServerIssue.Kind? = switch entry.state {
+            case .staleWorktree: .stale
+            case .orphan: .orphan
+            case .active: entry.health?.state == .hung ? .hung : nil
+            }
+
+            guard let kind else { continue }
+            issues.append(ServerIssue(kind: kind, port: entry.port, name: entry.title))
+            claimed.insert(entry.port)
+        }
+
+        return issues
     }
 }

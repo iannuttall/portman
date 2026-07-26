@@ -85,6 +85,28 @@ image handed to the button, *after* any `withSymbolConfiguration` (which returns
 the flag cleared). Setting `contentTintColor` at all opts the button out of automatic
 menu-bar adaptation, so it stops following light/dark.
 
+**The alert dot is the one exception, and it has to pay for the adaptation itself.** A template
+image is tinted wholesale to the menu bar's colour, so a badged image can't be one — the dot
+would come out black. `PanelController.badged` therefore draws the plug itself, in
+`labelColor`, and the image must be built with `NSImage(size:flipped:drawingHandler:)` rather
+than composited once: the handler runs inside the button's own appearance, so `labelColor`
+resolves to white on a dark menu bar and black on a light one. Compositing eagerly bakes in
+whichever appearance was current when that scan finished, and the icon then stays that colour
+through a light/dark switch. Verified both ways by switching appearance with the app running.
+
+**The count is set as an `attributedTitle` in both states, never as `title`.** The count often
+doesn't change when an alert clears, and assigning an unchanged string can leave the previous
+colour in place — the number stays orange after the problem is gone.
+
+**A menu bar signal blinks once per problem, not once per scan.** `PanelController` remembers
+which issue IDs it has already flagged, which is why `ServerIssue.id` is kind-plus-port and
+carries no pid: a restarted server is the same problem, and an ID that changed under it would
+blink again every 15 seconds. The dot holds the state; the blink only says "look now".
+
+**Issues are folded per port, not per entry.** Both halves of a conflict are one conflict, and
+a stale worktree holding a contested port is usually *why* it's contested — one kill fixes
+both. Counting them separately makes the menu bar overstate how much is wrong.
+
 **Ports are identifiers, not quantities.** `Text("\(port)")` localises 4321 into "4,321".
 Use `Text(verbatim:)`.
 

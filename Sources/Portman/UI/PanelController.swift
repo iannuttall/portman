@@ -22,6 +22,11 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var outsideClickMonitor: Any?
     private var localKeyMonitor: Any?
 
+    /// Issues the status item has already blinked for. A problem earns one blink, not
+    /// one per scan — the colour is what carries the state after that.
+    private var flaggedIssues: Set<String> = []
+    private var flashTask: Task<Void, Never>?
+
     var isOpen: Bool { panel?.isVisible == true }
 
     init(store: ServerStore) {
@@ -46,37 +51,99 @@ final class PanelController: NSObject, NSWindowDelegate {
         button.target = self
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.toolTip = AppInfo.displayName
         updateStatusItem()
     }
 
+    /// Reconciles the whole status item — colour, count, tooltip — with the store.
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
 
-        let count = store.badgeCount
+        // Any in-flight blink is drawing to the same button, so it has to stop before
+        // this writes the steady state or it would restore the state it captured.
+        flashTask?.cancel()
+        flashTask = nil
 
-        // isTemplate must be set on the image we actually hand to the button, and set
-        // last: a symbol-configured copy comes back with isTemplate cleared. Without
-        // it the symbol draws in its own colour — black — instead of following the
-        // menu bar, which is white in dark mode.
-        let symbol = Self.statusItemSymbol()
+        let issues = store.issues
+        render(alerting: !issues.isEmpty)
+        button.toolTip = Self.tooltip(issues: issues, count: store.badgeCount)
+
+        // A problem that was already showing doesn't blink again; only a new one does.
+        // Without this the icon would blink on every scan for as long as the problem
+        // lasted, which is how a signal turns into wallpaper.
+        let current = Set(issues.map(\.id))
+        let appeared = !current.subtracting(flaggedIssues).isEmpty
+        flaggedIssues = current
+
+        guard appeared, !store.reduceMotion else { return }
+        startFlash()
+    }
+
+    /// Draws the status item in one of its two states.
+    ///
+    /// Split out from `updateStatusItem` because the blink is exactly this, alternated:
+    /// the alerting look *is* the state, so flashing it off and on needs no second
+    /// rendering path that could drift from the first.
+    private func render(alerting: Bool) {
+        guard let button = statusItem.button else { return }
+
+        let count = String(store.badgeCount)
 
         switch Preferences.menuBarMode {
         case .iconOnly:
-            button.image = symbol
-            button.title = ""
+            button.image = Self.statusItemImage(alerting: alerting)
+            button.attributedTitle = NSAttributedString(string: "")
         case .iconAndCount:
-            button.image = symbol
+            button.image = Self.statusItemImage(alerting: alerting)
             button.imagePosition = .imageLeading
-            button.title = String(count)
+            button.attributedTitle = Self.title(count, on: button, tinted: false)
         case .countOnly:
+            // No icon means nothing for the dot to sit on, so the number carries it.
             button.image = nil
-            button.title = "\(count)"
+            button.attributedTitle = Self.title(count, on: button, tinted: alerting)
         }
 
         // Left nil deliberately. Any explicit tint opts the button out of the
         // automatic menu-bar adaptation, so the icon stops following light/dark.
+        // The dot is drawn into the image instead.
         button.contentTintColor = nil
+    }
+
+    /// The count.
+    ///
+    /// Set as an attributed title in *both* states rather than assigning `title` for the
+    /// untinted one: the count often doesn't change when an alert clears, and a plain
+    /// assignment of an unchanged string can leave the previous colour in place — the
+    /// number would stay orange after the problem went away. `labelColor` is what the
+    /// button would have used anyway, and it resolves against the menu bar's own
+    /// appearance, so the untinted state still follows light and dark.
+    private static func title(_ text: String, on button: NSButton, tinted: Bool) -> NSAttributedString {
+        NSAttributedString(
+            string: text,
+            attributes: [
+                .foregroundColor: tinted ? Theme.Colour.menuBarAlert : NSColor.labelColor,
+                .font: button.font ?? NSFont.menuBarFont(ofSize: 0)
+            ]
+        )
+    }
+
+    /// The plug, wearing a badge when something needs attention.
+    ///
+    /// A badge rather than an orange plug. The plug is the app's identity in a strip of
+    /// twenty other icons, and recolouring the whole thing reads as an error state for
+    /// Portman itself; a badge reads as "one of your servers". It also means the signal
+    /// carries shape as well as colour, which a recolour alone doesn't.
+    private static func statusItemImage(alerting: Bool) -> NSImage? {
+        guard let symbol = plugSymbol() else { return nil }
+        guard alerting else {
+            // isTemplate must be set on the image we actually hand to the button, and
+            // set last: a symbol-configured copy comes back with the flag cleared.
+            // Without it the symbol draws in its own colour — black — instead of
+            // following the menu bar, which is white in dark mode.
+            symbol.isTemplate = true
+            return symbol
+        }
+
+        return badged(symbol)
     }
 
     /// A plug, matching the app icon.
@@ -84,11 +151,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// The portrait variant is the narrowest of the plug symbols, which matters — the
     /// menu bar runs out of room and macOS silently hides whatever no longer fits.
     /// Filled rather than outline: at 16px an outline plug reads as a smudge.
-    ///
-    /// `isTemplate` is set on the configured copy, and last: `withSymbolConfiguration`
-    /// returns a new image with the flag cleared, and a non-template image draws in its
-    /// own colour instead of following the menu bar.
-    private static func statusItemSymbol() -> NSImage? {
+    private static func plugSymbol() -> NSImage? {
         let names = ["powerplug.portrait.fill", "powerplug.fill", "powerplug", "rectangle.stack"]
 
         for name in names {
@@ -96,21 +159,116 @@ final class PanelController: NSObject, NSWindowDelegate {
                 continue
             }
 
-            let symbol = base.withSymbolConfiguration(
+            return base.withSymbolConfiguration(
                 NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
             ) ?? base
-            symbol.isTemplate = true
-            return symbol
         }
 
         return nil
     }
 
+    /// Composites the alert dot over the plug's bottom-right corner.
+    ///
+    /// The badged image can't be a template — a template is tinted wholesale to the menu
+    /// bar's colour, which would turn the badge black. So the plug's own colour has to be
+    /// stated here, and the drawing is deferred rather than composited once: the handler
+    /// runs inside the button's appearance, so `labelColor` resolves to white on a dark
+    /// menu bar and black on a light one. Painting it at build time would freeze whichever
+    /// appearance happened to be current when the scan finished.
+    private static func badged(_ symbol: NSImage) -> NSImage {
+        let diameter = Theme.Size.menuBarBadge
+        let moat = Theme.Size.menuBarBadgeMoat
+        let overhang = Theme.Size.menuBarBadgeOverhang
+
+        // The badge hangs off the right edge rather than being given a column of its own,
+        // so a problem costs a couple of points of menu bar instead of a whole slot.
+        let size = NSSize(width: symbol.size.width + overhang + moat, height: symbol.size.height)
+        let badge = NSRect(x: size.width - diameter - moat, y: 0, width: diameter, height: diameter)
+
+        let image = NSImage(size: size, flipped: false) { _ in
+            let plug = NSRect(origin: .zero, size: symbol.size)
+            symbol.draw(in: plug)
+
+            // Template images arrive black; `.sourceAtop` recolours the glyph in place
+            // without painting the transparent area around it.
+            NSColor.labelColor.set()
+            plug.fill(using: .sourceAtop)
+
+            // Punch a transparent ring out of the plug before laying the badge in it.
+            // Without the gap the badge merges into the plug's filled body and the pair
+            // reads as one indistinct blob at 16px.
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current?.compositingOperation = .copy
+            NSColor.clear.setFill()
+            NSBezierPath(ovalIn: badge.insetBy(dx: -moat, dy: -moat)).fill()
+            NSGraphicsContext.restoreGraphicsState()
+
+            Theme.Colour.menuBarAlert.setFill()
+            NSBezierPath(ovalIn: badge).fill()
+            return true
+        }
+
+        image.isTemplate = false
+        return image
+    }
+
+    /// Blinks the alert off and on a few times, once, when a problem first appears.
+    ///
+    /// Discrete rather than a repeating pulse. A menu bar icon that pulses forever is
+    /// noise you stop seeing within a day, and it would still be pulsing long after you
+    /// had read it — the colour holds the state, and this only says "look now".
+    private func startFlash() {
+        flashTask = Task { @MainActor [weak self] in
+            for beat in 0..<Theme.Motion.menuBarFlashBeats {
+                self?.render(alerting: false)
+                try? await Task.sleep(for: Theme.Motion.menuBarFlashOff)
+                guard !Task.isCancelled else { break }
+
+                self?.render(alerting: true)
+
+                // No trailing pause on the last beat — it's already in its final state.
+                guard beat < Theme.Motion.menuBarFlashBeats - 1 else { break }
+                try? await Task.sleep(for: Theme.Motion.menuBarFlashOn)
+                guard !Task.isCancelled else { break }
+            }
+
+            // Cancellation means someone else is mid-render; leave the button to them.
+            guard !Task.isCancelled else { return }
+            self?.render(alerting: true)
+            self?.flashTask = nil
+        }
+    }
+
+    /// The status item's only room for detail, so it names what's wrong rather than
+    /// counting it. "Port 3000 has more than one listener" is something you can act on;
+    /// "1 issue" only tells you to go and open the panel.
+    private static func tooltip(issues: [ServerIssue], count: Int) -> String {
+        let listening = "\(count) listening"
+
+        guard !issues.isEmpty else {
+            return "\(AppInfo.displayName) — \(listening)"
+        }
+
+        let heading = "\(AppInfo.displayName) — \(listening), \(issues.count) needing attention"
+
+        // A tooltip taller than the menu bar's neighbourhood is worse than one that
+        // admits what it left out.
+        let shown = issues.prefix(5).map(\.sentence)
+        let hidden = issues.count - shown.count
+        let lines = hidden > 0 ? shown + ["…and \(hidden) more"] : Array(shown)
+
+        return ([heading] + lines).joined(separator: "\n")
+    }
+
     /// `@Observable` doesn't emit notifications, so re-register after each read.
+    ///
+    /// The whole `issues` list is tracked rather than a "has issues" boolean: one problem
+    /// clearing as another appears leaves a boolean untouched, and the tooltip would keep
+    /// naming the issue that had already gone.
     private func observeBadge() {
         withObservationTracking {
             _ = store.badgeCount
-            _ = store.hasIssues
+            _ = store.issues
         } onChange: {
             Task { @MainActor [weak self] in
                 self?.updateStatusItem()

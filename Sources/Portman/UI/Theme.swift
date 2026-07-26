@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Every spacing, radius, size and semantic colour the panel uses.
@@ -52,6 +53,16 @@ enum Theme {
         static let thumbnailHeight: CGFloat = 132
         static let sparklineWidth: CGFloat = 40
         static let sparklineHeight: CGFloat = 12
+
+        /// The status item's alert dot: big enough to register in peripheral vision,
+        /// small enough not to compete with the system's own icons.
+        static let menuBarBadge: CGFloat = 9
+        /// Transparent ring separating the dot from the plug underneath it.
+        static let menuBarBadgeMoat: CGFloat = 1
+        /// How far the dot hangs past the plug's right edge. Most of the dot sits *on* the
+        /// plug, so its moat cuts a visible notch out of the corner — a dot floating clear
+        /// of the icon just looks like a separate stray item in the menu bar.
+        static let menuBarBadgeOverhang: CGFloat = 3
     }
 
     // MARK: Type
@@ -81,6 +92,16 @@ enum Theme {
         static let orphan = Color(red: 0.72, green: 0.42, blue: 0.05)
         static let destructive = Color.red
         static let inert = Color.secondary.opacity(0.5)
+
+        /// The status item's alert colour, and the one place the app draws in the menu
+        /// bar with a colour of its own — see the template-image note in
+        /// `PanelController` for why that's an exception rather than a slip.
+        ///
+        /// A system colour, not `stale`'s fixed RGB: the status item has to stay legible
+        /// against a light *and* a dark menu bar, and only the system oranges carry both
+        /// variants. Orange rather than red because none of these are emergencies —
+        /// they're things to look at, and red is reserved for kill.
+        static let menuBarAlert = NSColor.systemOrange
 
         static let rowHover = Color.primary.opacity(0.06)
         static let rowSelected = Color.accentColor.opacity(0.14)
@@ -115,6 +136,13 @@ enum Theme {
         static let expand = SwiftUI.Animation.spring(response: 0.3, dampingFraction: 0.82)
         static let listUpdate = SwiftUI.Animation.easeInOut(duration: 0.22)
         static let kill = SwiftUI.Animation.easeOut(duration: 0.28)
+
+        /// The status item's one-shot blink when a problem first appears. Asymmetric on
+        /// purpose: short off, longer on, so the icon spends most of the blink showing
+        /// the badge rather than looking like it's flickering out.
+        static let menuBarFlashBeats = 2
+        static let menuBarFlashOff = Duration.milliseconds(110)
+        static let menuBarFlashOn = Duration.milliseconds(190)
     }
 }
 

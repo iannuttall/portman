@@ -262,6 +262,95 @@ final class ConflictTests: XCTestCase {
     }
 }
 
+// MARK: - Issues
+
+final class IssueDigestTests: XCTestCase {
+    func testSaysNothingWhenEverythingIsFine() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "shop", framework: "Next.js")),
+            makeEntry(port: 4321, pids: [2], project: project(name: "blog", framework: "Astro"))
+        ]
+
+        XCTAssertTrue(ListShaper.issues(in: entries, contestedPorts: []).isEmpty)
+    }
+
+    func testReportsStaleWorktreesOrphansAndHungServers() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "agent-1", framework: "Vite", isStaleWorktree: true)),
+            makeEntry(port: 4321, pids: [2], project: project(name: "gone", framework: "Astro", isOrphan: true)),
+            makeEntry(port: 5173, pids: [3], health: HealthReport(state: .hung))
+        ]
+
+        let issues = ListShaper.issues(in: entries, contestedPorts: [])
+
+        XCTAssertEqual(issues.map(\.kind), [.stale, .orphan, .hung])
+        XCTAssertEqual(issues.map(\.port), [3000, 4321, 5173])
+    }
+
+    func testIgnoresHealthyAndUnprobedServers() {
+        let entries = [
+            makeEntry(port: 3000, health: HealthReport(state: .healthy)),
+            makeEntry(port: 5432, pids: [2], command: "postgres", health: HealthReport(state: .nonHTTP)),
+            makeEntry(port: 6379, pids: [3], command: "redis", health: nil)
+        ]
+
+        XCTAssertTrue(ListShaper.issues(in: entries, contestedPorts: []).isEmpty)
+    }
+
+    /// Both halves of a conflict are one problem, so the count must not double.
+    func testReportsAContestedPortOnce() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "shop", framework: "Next.js")),
+            makeEntry(port: 3000, pids: [2], project: project(name: "blog", framework: "Astro"))
+        ]
+
+        let issues = ListShaper.issues(in: entries, contestedPorts: [3000])
+
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issues.first?.kind, .conflict)
+    }
+
+    /// A stale worktree holding a contested port is usually why the port is contested.
+    /// One kill fixes both, so it reads as one thing to deal with.
+    func testFoldsAnAbandonedServerIntoTheConflictItCauses() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "agent-1", framework: "Vite", isStaleWorktree: true)),
+            makeEntry(port: 3000, pids: [2], project: project(name: "shop", framework: "Next.js"))
+        ]
+
+        XCTAssertEqual(ListShaper.issues(in: entries, contestedPorts: [3000]).map(\.kind), [.conflict])
+    }
+
+    func testPutsConflictsFirstThenOrdersByPort() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "gone", framework: "Astro", isOrphan: true)),
+            makeEntry(port: 8080, pids: [2], command: "node"),
+            makeEntry(port: 8080, pids: [3], command: "caddy")
+        ]
+
+        let issues = ListShaper.issues(in: entries, contestedPorts: [8080])
+
+        XCTAssertEqual(issues.map(\.port), [8080, 3000])
+    }
+
+    /// The status item uses these to tell a new problem from one it already flagged,
+    /// so they have to survive a rescan that changed nothing.
+    func testIdentifiesAnIssueByKindAndPortOnly() {
+        let first = makeEntry(port: 3000, pids: [1], project: project(name: "app", framework: "Vite", isOrphan: true))
+        let restarted = makeEntry(port: 3000, pids: [99], project: project(name: "app", framework: "Vite", isOrphan: true))
+
+        XCTAssertEqual(
+            ListShaper.issues(in: [first], contestedPorts: []).map(\.id),
+            ListShaper.issues(in: [restarted], contestedPorts: []).map(\.id)
+        )
+    }
+
+    func testNamesEachIssueInASentenceThatIncludesThePort() {
+        let issue = ServerIssue(kind: .hung, port: 5173, name: "shop")
+        XCTAssertEqual(issue.sentence, "shop on 5173 accepts connections but never answers")
+    }
+}
+
 // MARK: - Classification
 
 final class ClassificationTests: XCTestCase {
@@ -416,7 +505,8 @@ private func makeEntry(
     command: String = "node",
     addresses: [String] = ["127.0.0.1"],
     project: ProjectMetadata? = nil,
-    cpu: Double? = nil
+    cpu: Double? = nil,
+    health: HealthReport? = nil
 ) -> ServerEntry {
     ServerEntry(
         port: port,
@@ -426,7 +516,8 @@ private func makeEntry(
         addresses: addresses,
         project: project,
         container: nil,
-        metrics: cpu.map { ProcessSample(cpuPercent: $0) }
+        metrics: cpu.map { ProcessSample(cpuPercent: $0) },
+        health: health
     )
 }
 
