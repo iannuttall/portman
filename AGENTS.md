@@ -112,20 +112,42 @@ Closing runs synchronously inside the callback: a modal alert spins its own run 
 doesn't service queued main-actor work, so a `Task` hop wouldn't land until the alert was
 already dismissed.
 
-**Sparkle doesn't re-announce an update it has already presented.** If a scheduled check puts
-the dialog up while the panel is closed, opening the panel afterwards covers it, and a
-subsequent user-initiated check only re-focuses the existing dialog — the delegate is not
-called again, so nothing closes the panel. Sparkle logs a warning about this class of problem
-for background apps ("does not implement gentle reminders"). Fixing it properly means a gentle
-reminder, which the menu bar dot is now the natural home for. Not done yet.
+**Scheduled updates are announced by us, not by Sparkle.** `UpdateWindowObserver` returns
+`false` from `standardUserDriverShouldHandleShowingScheduledUpdate`, so a check nobody asked for
+never throws a dialog up — for an accessory app that dialog lands behind whatever you're
+working in, which Sparkle itself warns about ("users may not take notice to update alerts that
+show up in the background"). The version arrives through
+`standardUserDriverWillHandleShowingUpdate` with `handleShowingUpdate == false` and becomes
+`pendingUpdate`, which the panel footer offers as "Update to x.y.z". Opting in requires
+`supportsGentleScheduledUpdateReminders` — these are optional Objective-C protocol methods, so a
+misspelled Swift signature compiles happily and is simply never called. Verify at runtime.
+
+**Anything in the panel that hands over to Sparkle must `dismiss()` first.** Sparkle only tells
+the delegate it's about to show an alert when the check was *user*-initiated
+(`SPUStandardUserDriver.m`: `if (state.userInitiated && ...)`). Clicking the footer reminder
+re-focuses an alert found on Sparkle's own schedule, so nothing is announced and the panel would
+sit on top of the window it just asked for. Don't reach for a "Sparkle is showing something"
+flag to solve this: the session-finish callback hangs off Sparkle's abort path, so the flag can
+stick, and a stuck flag means a menu bar app that won't open its menu.
+
+The residue: clicking the status item while an update alert is up still covers it, and
+dismissing the panel reveals it again. Left alone deliberately — that's the user choosing the
+panel, not a dialog appearing somewhere they can't see.
+
+**The menu bar dot means a *server* needs attention, and nothing else.** A pending app update
+is not a server problem, and the tooltip enumerates servers. If the dot ever starts meaning
+"something, somewhere" both signals stop being worth reading.
 
 **Verify the update flow with `PORTMAN_OPEN_ON_LAUNCH=update`.** The panel's overflow menu
 can't be reached through accessibility, so there's no way to click "Check for Updates" from a
 script. That value opens the panel, waits until it's unambiguously up, then asks for an update.
 Test against an isolated bundle ID — `BUNDLE_ID=is.ian.portman.updatecheck VERSION=0.2.9
-BUILD_NUMBER=3 ./scripts/build-app.sh` — so Sparkle's state doesn't land in the real domain,
-and set `SUEnableAutomaticChecks -bool NO` in it or a scheduled check races the panel and
-invalidates the test.
+BUILD_NUMBER=3 ./scripts/build-app.sh` — so Sparkle's state doesn't land in the real domain.
+Sparkle only runs a scheduled check in a *fresh* domain, so `defaults delete` it between runs;
+deleting `SULastCheckTime` alone isn't enough. `SUEnableAutomaticChecks -bool YES` exercises the
+gentle reminder, `NO` exercises the user-initiated path without a scheduled check racing it.
+Quit every other copy first: the hotkey belongs to whichever instance registered it, and the
+panel can only be opened from a script by hotkey.
 
 **Issues are folded per port, not per entry.** Both halves of a conflict are one conflict, and
 a stale worktree holding a contested port is usually *why* it's contested — one kill fixes

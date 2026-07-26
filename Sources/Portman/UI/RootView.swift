@@ -125,7 +125,16 @@ struct RootView: View {
             Divider()
 
             if UpdateController.shared.isConfigured {
-                Button("Check for Updates…") {
+                // Names the version when one is waiting: the menu is where people go
+                // looking for updates, so it shouldn't ask you to check for something it
+                // already knows about.
+                Button(
+                    UpdateController.shared.pendingUpdate.map { "Update to \($0)…" }
+                        ?? "Check for Updates…"
+                ) {
+                    // Same reason as the footer button: whatever Sparkle puts on screen
+                    // would open behind the panel, and it doesn't always tell us.
+                    dismiss()
                     UpdateController.shared.checkForUpdates()
                 }
                 .disabled(!UpdateController.shared.canCheckForUpdates)
@@ -323,6 +332,23 @@ struct RootView: View {
                     destructive: true
                 ) {
                     store.requestKill(rows: store.rows, title: "matching this filter")
+                }
+            } else if let version = UpdateController.shared.pendingUpdate {
+                // Sparkle found this on a check nobody asked for, and we told it not to
+                // put a dialog up for that. This is the reminder instead: it waits here
+                // until you're looking, and clicking it hands over to Sparkle's own alert.
+                // Yielding to "Kill all" isn't a compromise — a footer with two buttons in
+                // 400 points stops being a glance, and an update can wait for the filter
+                // to clear.
+                ActionButton(label: "Update to \(version)", symbol: "arrow.down.circle") {
+                    // Dismiss first, like the Settings button, and don't rely on the
+                    // delegate to do it: Sparkle only announces an alert it's about to show
+                    // when the check was user-initiated, and this update came from a
+                    // scheduled one. Clicking here only brings that existing alert into
+                    // focus, which it says nothing about — so the panel would sit on top
+                    // of the very window it just asked for.
+                    dismiss()
+                    UpdateController.shared.checkForUpdates()
                 }
             }
         }

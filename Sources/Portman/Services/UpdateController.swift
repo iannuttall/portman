@@ -8,11 +8,16 @@ import Sparkle
 /// without those — running from source, or a local `make publish-local` — simply has no
 /// updater, rather than a broken one that errors when you ask it to check.
 @MainActor
+@Observable
 final class UpdateController {
     static let shared = UpdateController()
 
-    private var controller: SPUStandardUpdaterController?
-    private let windowObserver = UpdateWindowObserver()
+    @ObservationIgnored private var controller: SPUStandardUpdaterController?
+    @ObservationIgnored private let windowObserver = UpdateWindowObserver()
+
+    /// The version Sparkle has found on a check we didn't ask for, and which nothing has
+    /// told the user about yet. The panel mentions it in the footer.
+    private(set) var pendingUpdate: String?
 
     /// True when this build knows where to look for updates.
     var isConfigured: Bool {
@@ -25,10 +30,7 @@ final class UpdateController {
 
     /// Runs immediately before Sparkle puts a window on screen, so the panel can get out
     /// from in front of it.
-    var onWillShowWindow: (@MainActor () -> Void)? {
-        get { windowObserver.onWillShowWindow }
-        set { windowObserver.onWillShowWindow = newValue }
-    }
+    @ObservationIgnored var onWillShowWindow: (@MainActor () -> Void)?
 
     private init() {
         guard Self.feedURL != nil, Self.publicKey != nil else { return }
@@ -38,8 +40,29 @@ final class UpdateController {
             updaterDelegate: nil,
             userDriverDelegate: windowObserver
         )
+
+        windowObserver.willShowWindow = { [weak self] in
+            self?.onWillShowWindow?()
+        }
+
+        windowObserver.foundQuietUpdate = { [weak self] version in
+            self?.pendingUpdate = version
+        }
+
+        windowObserver.didFinishSession = { [weak self] in
+            // Whatever the outcome — installed, skipped, put off — the reminder has done
+            // its job. If it was deferred, Sparkle raises it again on its own schedule.
+            self?.pendingUpdate = nil
+        }
     }
 
+    /// Asks for an update, and doubles as the way to bring an alert that's already on
+    /// screen back to the front — which is what Sparkle's documentation prescribes.
+    ///
+    /// Callers inside the panel must dismiss it first. Sparkle only announces an alert it's
+    /// about to show when the check was user-initiated, so re-focusing an alert it found on
+    /// its own schedule tells us nothing, and the panel would cover the window it just
+    /// asked for.
     func checkForUpdates() {
         controller?.updater.checkForUpdates()
     }
@@ -81,21 +104,52 @@ final class UpdateController {
 /// launch from the main actor and read on the main thread, which is the only thread
 /// Sparkle delivers these on.
 private final class UpdateWindowObserver: NSObject, SPUStandardUserDriverDelegate, @unchecked Sendable {
-    var onWillShowWindow: (@MainActor () -> Void)?
+    var willShowWindow: (@MainActor () -> Void)?
+    var foundQuietUpdate: (@MainActor (String) -> Void)?
+    var didFinishSession: (@MainActor () -> Void)?
+
+    /// Opts into Sparkle's gentle reminders.
+    ///
+    /// Without this, a scheduled check throws its dialog up unprompted — and for an
+    /// accessory app that lands behind whatever you're working in, which Sparkle itself
+    /// warns about: "users may not take notice to update alerts that show up in the
+    /// background". An update is never urgent enough to interrupt for.
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    /// `false` means "don't show it, we will".
+    ///
+    /// Only consulted for checks the user didn't ask for. A check they *did* ask for is
+    /// always Sparkle's to present, which is right — they're standing there waiting for an
+    /// answer.
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        false
+    }
 
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool,
         forUpdate update: SUAppcastItem,
         state: SPUUserUpdateState
     ) {
-        // False means Sparkle is handing the update to us to present, and nothing of its
-        // own is about to appear for the panel to be in front of.
-        guard handleShowingUpdate else { return }
-        willShowWindow()
+        guard handleShowingUpdate else {
+            // Ours to mention. Nothing of Sparkle's is about to appear, so the panel stays
+            // where it is — this is the quiet path.
+            let version = update.displayVersionString
+            MainActor.assumeIsolated { foundQuietUpdate?(version) }
+            return
+        }
+
+        notifyWillShowWindow()
     }
 
     func standardUserDriverWillShowModalAlert() {
-        willShowWindow()
+        notifyWillShowWindow()
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        MainActor.assumeIsolated { didFinishSession?() }
     }
 
     /// Sparkle calls these on the main thread, immediately before the window appears.
@@ -104,9 +158,9 @@ private final class UpdateWindowObserver: NSObject, SPUStandardUserDriverDelegat
     /// own run loop, which doesn't service queued main-actor work, so the hop wouldn't
     /// land until the alert was dismissed — leaving the panel on top for exactly as long
     /// as it matters.
-    private func willShowWindow() {
+    private func notifyWillShowWindow() {
         MainActor.assumeIsolated {
-            onWillShowWindow?()
+            willShowWindow?()
         }
     }
 }
