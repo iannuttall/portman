@@ -1,5 +1,12 @@
 <div align="center">
 
+<!-- Two assets rather than one with currentColor: an <img> inherits no CSS, so
+     the mark needs a real light and a real dark file to survive both themes. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/portman-mark-dark.svg">
+  <img src=".github/assets/portman-mark.svg" alt="Portman" height="72">
+</picture>
+
 # Portman
 
 **Every port on your Mac, and what's actually using it.**

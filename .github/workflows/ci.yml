@@ -12,8 +12,15 @@ concurrency:
 
 jobs:
   test:
-    # The app targets macOS 15 and uses libproc, so this can't run on Linux.
-    runs-on: macos-15
+    # Uses libproc, so this can't run on Linux.
+    #
+    # macOS 26, not 15, even though the app's deployment target is 15: the panel
+    # background calls `glassEffect`, and `if #available(macOS 26)` only defers
+    # the *call* to runtime — the symbol still has to exist in the SDK at compile
+    # time. On the macos-15 image it doesn't, so CI failed to build code that
+    # compiles and ships fine. The runner picks the SDK; LSMinimumSystemVersion
+    # still says 15.0.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +47,7 @@ jobs:
 
       - name: Verify the bundle launches
         run: |
-          "dist/portman.app/Contents/MacOS/portman" & PID=$!
+          "dist/Portman.app/Contents/MacOS/portman" & PID=$!
           sleep 6
           if kill -0 $PID 2>/dev/null; then
             echo "launched and stayed up"
@@ -51,7 +58,7 @@ jobs:
           fi
 
       - name: Verify signature
-        run: codesign --verify --deep --strict --verbose=1 "dist/portman.app"
+        run: codesign --verify --deep --strict --verbose=1 "dist/Portman.app"
 
       - name: Scan detection without the UI
         run: swift run portman --list | head -20
