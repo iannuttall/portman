@@ -13,6 +13,32 @@
     -->
 
     <item>
+      <title>0.3.0</title>
+      <pubDate>Sun, 26 Jul 2026 10:26:59 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>The menu bar tells you something is wrong, instead of waiting for you to go
+        looking.</p>
+        <ul>
+          <li>An orange dot on the icon when a port has more than one listener, a server
+          has outlived its project folder or worktree, or it accepts connections but
+          never answers.</li>
+          <li>Hover it to read which — the tooltip names the problem rather than
+          counting it.</li>
+          <li>A new problem blinks the dot briefly and then settles. Nothing pulses at
+          you indefinitely, and it follows Reduce motion.</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/iannuttall/portman/releases/download/v0.3.0/portman-0.3.0.dmg"
+        length="4424844"
+        type="application/octet-stream"
+        sparkle:edSignature="EWfd4bgt1uTwKMfhmUhJLK4veuc9KzAajnHFZF7B5aGceVxi5ClYRUSqM1po3SBQaO/fA0tIebf8AQDik+1OAQ==" />
+    </item>
+
+    <item>
       <title>0.2.0</title>
       <pubDate>Sat, 25 Jul 2026 20:15:00 +0000</pubDate>
       <sparkle:version>3</sparkle:version>
