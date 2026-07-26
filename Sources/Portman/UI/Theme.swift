@@ -20,6 +20,15 @@ enum Theme {
         static let menuBarGap: CGFloat = 6
     }
 
+    // MARK: Settings
+
+    enum Settings {
+        static let width: CGFloat = 480
+        /// The ignore list is the one pane without an intrinsic height, and only when it
+        /// actually has rules in it.
+        static let ignoreHeight: CGFloat = 420
+    }
+
     // MARK: Spacing
 
     enum Space {

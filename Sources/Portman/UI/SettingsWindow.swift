@@ -2,13 +2,63 @@ import AppKit
 import ServiceManagement
 import SwiftUI
 
+/// Which pane the settings window is showing.
+///
+/// The tabs are toolbar items rather than a SwiftUI `TabView`, because `.preference`
+/// toolbar style is what makes a settings window read as one on macOS: icons above
+/// labels, centred, merged *into* the title bar instead of sitting in a second strip
+/// under it. SwiftUI only does that for itself inside a `Settings` scene, which this app
+/// can't use — it's an AppKit app with no SwiftUI App lifecycle.
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general
+    case display
+    case apps
+    case ignore
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .general: return "General"
+        case .display: return "Display"
+        case .apps: return "Apps"
+        case .ignore: return "Ignore Rules"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .display: return "slider.horizontal.3"
+        case .apps: return "app.badge"
+        case .ignore: return "eye.slash"
+        }
+    }
+
+    var itemIdentifier: NSToolbarItem.Identifier {
+        NSToolbarItem.Identifier("settings.\(rawValue)")
+    }
+
+    static func tab(for identifier: NSToolbarItem.Identifier) -> SettingsTab? {
+        allCases.first { $0.itemIdentifier == identifier }
+    }
+}
+
+/// The selected pane, shared between the AppKit toolbar and the SwiftUI content.
+@MainActor
+@Observable
+final class SettingsSelection {
+    var tab: SettingsTab = .general
+}
+
 /// A real settings window, replacing the three raw text views the old build used
 /// for ignore rules.
 @MainActor
-final class SettingsWindow {
+final class SettingsWindow: NSObject {
     static let shared = SettingsWindow()
 
     private var window: NSWindow?
+    private let selection = SettingsSelection()
 
     /// Brings the settings window up in front of everything.
     ///
@@ -24,38 +74,100 @@ final class SettingsWindow {
             return
         }
 
-        let hosting = NSHostingController(rootView: SettingsView(store: store))
+        let hosting = NSHostingController(rootView: SettingsView(store: store, selection: selection))
+
+        // Each pane sizes the window to its own content. One fixed height left the short
+        // panes with a band of dead space at the bottom, and would quietly start clipping
+        // the tall ones as settings are added.
+        hosting.sizingOptions = [.preferredContentSize]
+
         let window = NSWindow(contentViewController: hosting)
-        window.title = "\(AppInfo.displayName) Settings"
         window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 480, height: 520))
         window.isReleasedWhenClosed = false
+
+        let toolbar = NSToolbar(identifier: "settings")
+        toolbar.delegate = self
+        toolbar.allowsUserCustomization = false
+        toolbar.displayMode = .iconAndLabel
+        toolbar.selectedItemIdentifier = selection.tab.itemIdentifier
+
+        window.toolbar = toolbar
+        window.toolbarStyle = .preference
+        // The pane name, not "<App> Settings". With `.preference` style the title sits
+        // above the tabs, and naming the app there again just repeats the icon you
+        // clicked to get here.
+        window.title = selection.tab.label
         window.center()
 
         self.window = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
+
+    @objc private func selectTab(_ sender: NSToolbarItem) {
+        guard let tab = SettingsTab.tab(for: sender.itemIdentifier) else { return }
+
+        selection.tab = tab
+        window?.title = tab.label
+        // Set explicitly. Listing an item as selectable is what lets it *look* selected,
+        // but nothing moves the selection on its own — without this the pane changes
+        // while the highlight stays on whichever tab was open first.
+        window?.toolbar?.selectedItemIdentifier = tab.itemIdentifier
+    }
+}
+
+// MARK: - Toolbar
+
+extension SettingsWindow: NSToolbarDelegate {
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsTab.allCases.map(\.itemIdentifier)
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsTab.allCases.map(\.itemIdentifier)
+    }
+
+    /// What turns the items into a radio group. Without this they're plain buttons: they
+    /// still switch panes, but nothing ever looks selected.
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        SettingsTab.allCases.map(\.itemIdentifier)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard let tab = SettingsTab.tab(for: itemIdentifier) else { return nil }
+
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = tab.label
+        item.paletteLabel = tab.label
+        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: tab.label)
+        item.target = self
+        item.action = #selector(selectTab(_:))
+        return item
+    }
 }
 
 struct SettingsView: View {
     @Bindable var store: ServerStore
+    let selection: SettingsSelection
 
     var body: some View {
-        TabView {
-            GeneralSettings(store: store)
-                .tabItem { Label("General", systemImage: "gearshape") }
-
-            DisplaySettings(store: store)
-                .tabItem { Label("Display", systemImage: "slider.horizontal.3") }
-
-            AppsSettings()
-                .tabItem { Label("Apps", systemImage: "app.badge") }
-
-            IgnoreSettings(store: store)
-                .tabItem { Label("Ignore Rules", systemImage: "eye.slash") }
+        Group {
+            switch selection.tab {
+            case .general:
+                GeneralSettings(store: store)
+            case .display:
+                DisplaySettings(store: store)
+            case .apps:
+                AppsSettings()
+            case .ignore:
+                IgnoreSettings(store: store)
+            }
         }
-        .frame(width: 480, height: 520)
+        .frame(width: Theme.Settings.width)
     }
 }
 
@@ -330,12 +442,25 @@ private struct IgnoreSettings: View {
                     .disabled(newRule.trimmingCharacters(in: .whitespaces).isEmpty)
             }
 
-            List {
-                ruleSection("Ports", items: ports) { remove($0, from: .port) }
-                ruleSection("Apps", items: commands) { remove($0, from: .app) }
-                ruleSection("Projects and containers", items: targets) { remove($0, from: .project) }
+            // A `List` fills whatever height it's offered and reports none of its own, so
+            // it has to be given one — and when there's nothing in it, being given 420
+            // points leaves the pane as one enormous blank. The empty state is a line of
+            // text instead, and the window shrinks to it.
+            if ports.isEmpty && commands.isEmpty && targets.isEmpty {
+                Text("Nothing is ignored yet. Anything you add here stops appearing in the panel.")
+                    .font(Theme.Typography.subtitle)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, Theme.Space.regular)
+            } else {
+                List {
+                    ruleSection("Ports", items: ports) { remove($0, from: .port) }
+                    ruleSection("Apps", items: commands) { remove($0, from: .app) }
+                    ruleSection("Projects and containers", items: targets) { remove($0, from: .project) }
+                }
+                .listStyle(.inset)
+                .frame(height: Theme.Settings.ignoreHeight)
             }
-            .listStyle(.inset)
         }
         .padding(Theme.Space.loose)
     }
