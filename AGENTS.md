@@ -103,6 +103,30 @@ which issue IDs it has already flagged, which is why `ServerIssue.id` is kind-pl
 carries no pid: a restarted server is the same problem, and an ID that changed under it would
 blink again every 15 seconds. The dot holds the state; the blink only says "look now".
 
+**Sparkle's windows open *behind* the panel.** The panel is at `.popUpMenu` level, so an
+update dialog appears underneath it and can only be read after dismissing the panel by hand.
+`UpdateController` closes the panel from `SPUStandardUserDriverDelegate` — both
+`standardUserDriverWillHandleShowingUpdate` and `standardUserDriverWillShowModalAlert`, since
+the first covers the update dialog and the second the "you're up to date" and error alerts.
+Closing runs synchronously inside the callback: a modal alert spins its own run loop, which
+doesn't service queued main-actor work, so a `Task` hop wouldn't land until the alert was
+already dismissed.
+
+**Sparkle doesn't re-announce an update it has already presented.** If a scheduled check puts
+the dialog up while the panel is closed, opening the panel afterwards covers it, and a
+subsequent user-initiated check only re-focuses the existing dialog — the delegate is not
+called again, so nothing closes the panel. Sparkle logs a warning about this class of problem
+for background apps ("does not implement gentle reminders"). Fixing it properly means a gentle
+reminder, which the menu bar dot is now the natural home for. Not done yet.
+
+**Verify the update flow with `PORTMAN_OPEN_ON_LAUNCH=update`.** The panel's overflow menu
+can't be reached through accessibility, so there's no way to click "Check for Updates" from a
+script. That value opens the panel, waits until it's unambiguously up, then asks for an update.
+Test against an isolated bundle ID — `BUNDLE_ID=is.ian.portman.updatecheck VERSION=0.2.9
+BUILD_NUMBER=3 ./scripts/build-app.sh` — so Sparkle's state doesn't land in the real domain,
+and set `SUEnableAutomaticChecks -bool NO` in it or a scheduled check races the panel and
+invalidates the test.
+
 **Issues are folded per port, not per entry.** Both halves of a conflict are one conflict, and
 a stale worktree holding a contested port is usually *why* it's contested — one kill fixes
 both. Counting them separately makes the menu bar overstate how much is wrong.
@@ -174,8 +198,9 @@ make publish-local           # build, sign, install to ~/Applications, relaunch
 make dmg                     # drag-install DMG
 ```
 
-`PORTMAN_OPEN_ON_LAUNCH=1|expand|settings` drives the panel on launch, for screenshots and UI
-checks without a real click.
+`PORTMAN_OPEN_ON_LAUNCH=1|expand|settings|update` drives the panel on launch, for screenshots
+and UI checks without a real click. `update` also asks Sparkle for an update once the panel is
+up — see the Traps entry, which has the rest of the setup that check needs.
 
 ## Verification
 
