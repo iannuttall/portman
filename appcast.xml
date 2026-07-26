@@ -13,6 +13,37 @@
     -->
 
     <item>
+      <title>0.3.1</title>
+      <pubDate>Sun, 26 Jul 2026 11:44:02 +0000</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>Updates stay out of your way, and Settings looks like a Mac settings
+        window.</p>
+        <ul>
+          <li>A new version waits in the panel footer as a button naming it, rather than
+          putting a dialog in front of whatever you were doing. Portman lives in the menu
+          bar, so that dialog usually opened behind your work, where you might never
+          notice it.</li>
+          <li>Asking for an update now closes the panel first. The update window used to
+          open underneath the panel, and you had to dismiss the panel by hand before you
+          could read or click it.</li>
+          <li>Settings tabs moved up into the title bar with icons above the labels, the
+          way macOS does it. Each tab sizes the window to its own content, so no pane ends
+          in a band of empty space.</li>
+          <li>The Ignore Rules tab tells you when nothing is ignored, instead of showing
+          an empty list four hundred points tall.</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/iannuttall/portman/releases/download/v0.3.1/portman-0.3.1.dmg"
+        length="4446757"
+        type="application/octet-stream"
+        sparkle:edSignature="Dlb6yAleK3HSyA5Q/RvXA/mhtgj9qesczTDjIieSJ48Jjt95HH6Gpmf4HP0z37E7GS3kCu3yMcniipWAgpf0AQ==" />
+    </item>
+
+    <item>
       <title>0.3.0</title>
       <pubDate>Sun, 26 Jul 2026 10:26:59 +0000</pubDate>
       <sparkle:version>4</sparkle:version>
