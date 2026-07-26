@@ -19,16 +19,16 @@
       <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
-        <p>The menu bar tells you something is wrong, instead of waiting for you to go
-        looking.</p>
+        <p>The menu bar now shows you when something needs attention, instead of waiting
+        for you to open the panel and find it.</p>
         <ul>
-          <li>An orange dot on the icon when a port has more than one listener, a server
-          has outlived its project folder or worktree, or it accepts connections but
-          never answers.</li>
-          <li>Hover it to read which — the tooltip names the problem rather than
-          counting it.</li>
-          <li>A new problem blinks the dot briefly and then settles. Nothing pulses at
-          you indefinitely, and it follows Reduce motion.</li>
+          <li>The icon takes an orange dot when a port has more than one listener, when a
+          server has outlived the folder it came from, or when it accepts connections and
+          then never answers.</li>
+          <li>Hover it and the tooltip names the problem. "Port 3000 has more than one
+          listener" tells you what to do about it. "1 issue" does not.</li>
+          <li>A new problem blinks the dot twice and then settles. Nothing pulses at you
+          all day, and it follows Reduce motion.</li>
         </ul>
       ]]></description>
       <enclosure

@@ -239,17 +239,21 @@ final class PanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// The status item's only room for detail, so it names what's wrong rather than
-    /// counting it. "Port 3000 has more than one listener" is something you can act on;
+    /// The status item's only room for detail, so it names what's wrong instead of
+    /// counting it. "Port 3000 has more than one listener" tells you what to do about it.
     /// "1 issue" only tells you to go and open the panel.
     private static func tooltip(issues: [ServerIssue], count: Int) -> String {
-        let listening = "\(count) listening"
+        // The app's name goes on its own line rather than being punctuated onto the front
+        // of the count. A tooltip is prose, and it's already multi-line when something
+        // needs attention.
+        let servers = "\(count) server\(count == 1 ? "" : "s") listening"
 
         guard !issues.isEmpty else {
-            return "\(AppInfo.displayName) — \(listening)"
+            return "\(AppInfo.displayName)\n\(servers)"
         }
 
-        let heading = "\(AppInfo.displayName) — \(listening), \(issues.count) needing attention"
+        let attention = issues.count == 1 ? "1 needs attention" : "\(issues.count) need attention"
+        let heading = "\(AppInfo.displayName)\n\(servers), \(attention)"
 
         // A tooltip taller than the menu bar's neighbourhood is worse than one that
         // admits what it left out.
