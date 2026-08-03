@@ -13,6 +13,30 @@
     -->
 
     <item>
+      <title>0.3.2</title>
+      <pubDate>Mon, 03 Aug 2026 20:14:36 +0000</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>0.3.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>Repeated package names now tell you which project they belong to, and the
+        scrollbar takes up less room.</p>
+        <ul>
+          <li>Rows with the same package name include the shortest useful part of their
+          path. For example, two apps called "site" now read "ian.is / site" and
+          "islamabad-v1 / site".</li>
+          <li>The panel uses a narrower scrollbar while still following your macOS
+          scroll-bar visibility setting.</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/iannuttall/portman/releases/download/v0.3.2/portman-0.3.2.dmg"
+        length="4468194"
+        type="application/octet-stream"
+        sparkle:edSignature="KbMPpGSr7dNK+HVWEG3xDAdWAdR/QWCyFWPmpnFP/Rscv2tvFRlcIBQqGx8w17ek2SQZ0jFzly7SRCVSIvZzAQ==" />
+    </item>
+
+    <item>
       <title>0.3.1</title>
       <pubDate>Sun, 26 Jul 2026 11:44:02 +0000</pubDate>
       <sparkle:version>5</sparkle:version>
