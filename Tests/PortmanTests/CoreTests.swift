@@ -235,6 +235,53 @@ final class FoldingTests: XCTestCase {
 
         XCTAssertEqual(ListShaper.folded(entries, order: .port).count, 2)
     }
+
+    func testDisambiguatesDuplicatePackageNamesWithProjectContext() {
+        let entries = [
+            makeEntry(
+                port: 4321,
+                project: project(
+                    name: "site",
+                    framework: "Astro",
+                    path: "/Users/test/dev/sites/ian.is/apps/site"
+                )
+            ),
+            makeEntry(
+                port: 4322,
+                pids: [2],
+                project: project(
+                    name: "site",
+                    framework: "Astro",
+                    path: "/Users/test/conductor/workspaces/keep/islamabad-v1/apps/site"
+                )
+            )
+        ]
+
+        let rows = ListShaper.sections(
+            for: entries,
+            pinnedKeys: [],
+            mode: .none,
+            order: .port
+        ).flatMap(\.rows)
+
+        XCTAssertEqual(rows.map(\.projectQualifier), ["ian.is", "islamabad-v1"])
+    }
+
+    func testLeavesUniqueProjectNamesUnqualified() {
+        let entries = [
+            makeEntry(port: 3000, project: project(name: "shop", framework: "Next.js")),
+            makeEntry(port: 4321, pids: [2], project: project(name: "blog", framework: "Astro"))
+        ]
+
+        let rows = ListShaper.sections(
+            for: entries,
+            pinnedKeys: [],
+            mode: .none,
+            order: .port
+        ).flatMap(\.rows)
+
+        XCTAssertEqual(rows.map(\.projectQualifier), [nil, nil])
+    }
 }
 
 // MARK: - Conflicts
@@ -486,12 +533,14 @@ final class FormatTests: XCTestCase {
 private func project(
     name: String,
     framework: String?,
+    path: String? = nil,
     isOrphan: Bool = false,
     isStaleWorktree: Bool = false
 ) -> ProjectMetadata {
-    ProjectMetadata(
-        cwd: "/Users/test/dev/\(name)",
-        root: "/Users/test/dev/\(name)",
+    let path = path ?? "/Users/test/dev/\(name)"
+    return ProjectMetadata(
+        cwd: path,
+        root: path,
         name: name,
         framework: framework,
         isOrphan: isOrphan,

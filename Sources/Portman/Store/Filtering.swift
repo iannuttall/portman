@@ -9,6 +9,13 @@ import Foundation
 struct ServerRowModel: Identifiable, Hashable, Sendable {
     let entry: ServerEntry
     let related: [ServerEntry]
+    let projectQualifier: String?
+
+    init(entry: ServerEntry, related: [ServerEntry], projectQualifier: String? = nil) {
+        self.entry = entry
+        self.related = related
+        self.projectQualifier = projectQualifier
+    }
 
     var id: String { entry.id }
 
@@ -361,7 +368,74 @@ enum ListShaper {
             }
         }
 
-        return sections
+        return disambiguateProjectNames(in: sections)
+    }
+
+    /// Package names such as `site` and `app` are common inside monorepos. When
+    /// more than one visible project has the same name, prefix each with the
+    /// shortest useful part of its path: `ian.is / site`, not the full root.
+    private static func disambiguateProjectNames(in sections: [ServerSection]) -> [ServerSection] {
+        let rows = sections.flatMap(\.rows)
+        let duplicates = Dictionary(grouping: rows) { $0.entry.title.lowercased() }
+            .filter { _, rows in
+                Set(rows.compactMap { $0.entry.project?.path }).count > 1
+            }
+
+        var qualifiers: [String: String] = [:]
+
+        for rows in duplicates.values {
+            let candidates = rows.compactMap { row -> (String, [String])? in
+                guard let project = row.entry.project, let path = project.path else { return nil }
+                return (row.id, projectContextComponents(path: path, name: project.name))
+            }
+
+            for (id, components) in candidates {
+                guard !components.isEmpty else { continue }
+
+                for length in 1...components.count {
+                    let suffix = components.suffix(length)
+                    let isUnique = candidates.filter { _, other in
+                        other.suffix(length) == suffix
+                    }.count == 1
+
+                    if isUnique || length == components.count {
+                        qualifiers[id] = suffix.joined(separator: " / ")
+                        break
+                    }
+                }
+            }
+        }
+
+        return sections.map { section in
+            ServerSection(
+                id: section.id,
+                title: section.title,
+                style: section.style,
+                rows: section.rows.map { row in
+                    ServerRowModel(
+                        entry: row.entry,
+                        related: row.related,
+                        projectQualifier: qualifiers[row.id]
+                    )
+                }
+            )
+        }
+    }
+
+    private static func projectContextComponents(path: String, name: String) -> [String] {
+        var components = URL(fileURLWithPath: path).standardized.pathComponents
+            .filter { $0 != "/" }
+
+        if components.last?.localizedCaseInsensitiveCompare(name) == .orderedSame {
+            components.removeLast()
+        }
+
+        // These describe a monorepo's layout, not the project containing it.
+        if let last = components.last?.lowercased(), ["apps", "packages", "services"].contains(last) {
+            components.removeLast()
+        }
+
+        return components
     }
 
     // MARK: - Conflicts

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct RootView: View {
@@ -176,6 +177,11 @@ struct RootView: View {
                     }
                 }
                 .padding(.vertical, Theme.Space.snug)
+                .background(alignment: .topLeading) {
+                    SmallVerticalScroller()
+                        .frame(width: 0, height: 0)
+                        .allowsHitTesting(false)
+                }
             }
             .frame(maxHeight: .infinity)
             .scrollIndicators(.automatic)
@@ -376,5 +382,38 @@ struct RootView: View {
         guard let row = store.selectedRow ?? store.rows.first else { return }
         store.open(row.entry)
         dismiss()
+    }
+}
+
+/// SwiftUI exposes whether a scroll indicator is visible, but not its size.
+/// Respect the system's visibility setting while using AppKit's narrower control
+/// size, since a full-width legacy scroller takes too much from this small panel.
+private struct SmallVerticalScroller: NSViewRepresentable {
+    func makeNSView(context: Context) -> ConfigurationView {
+        ConfigurationView()
+    }
+
+    func updateNSView(_ nsView: ConfigurationView, context: Context) {
+        nsView.configure()
+    }
+
+    final class ConfigurationView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            configure()
+        }
+
+        func configure() {
+            var ancestor = superview
+
+            while let view = ancestor {
+                if let scrollView = view as? NSScrollView {
+                    scrollView.verticalScroller?.controlSize = .small
+                    return
+                }
+
+                ancestor = view.superview
+            }
+        }
     }
 }

@@ -85,9 +85,8 @@ struct ServerRowView: View {
 
     private var nameLine: some View {
         HStack(spacing: Theme.Space.snug) {
-            Text(entry.title)
+            projectTitle
                 .font(Theme.Typography.title)
-                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -137,6 +136,16 @@ struct ServerRowView: View {
                 )
             }
         }
+    }
+
+    private var projectTitle: Text {
+        guard let qualifier = row.projectQualifier else {
+            return Text(entry.title).foregroundStyle(.primary)
+        }
+
+        return Text(qualifier + " / ")
+            .foregroundStyle(.secondary)
+            + Text(entry.title).foregroundStyle(.primary)
     }
 
     /// The quiet second line, composed as one string.
