@@ -7,6 +7,8 @@ import SwiftUI
 struct ServerRowView: View {
     let row: ServerRowModel
     let isSelected: Bool
+    let isSelecting: Bool
+    let isChecked: Bool
     let isExpanded: Bool
     let isConflicted: Bool
     let showsStateChip: Bool
@@ -52,7 +54,21 @@ struct ServerRowView: View {
 
     private var header: some View {
         HStack(spacing: Theme.Space.comfy) {
-            StatusDot(entry: entry)
+            if isSelecting {
+                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(
+                        isChecked || isSelected
+                            ? AnyShapeStyle(Color.accentColor)
+                            : AnyShapeStyle(.tertiary)
+                    )
+                    // Replaces the status dot in selection mode and keeps its slot,
+                    // so every title stays on the same left edge as the normal row.
+                    .frame(width: Theme.Size.statusDot)
+                    .transition(.opacity.combined(with: .scale))
+            } else {
+                StatusDot(entry: entry)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 nameLine
@@ -69,7 +85,7 @@ struct ServerRowView: View {
 
             Spacer(minLength: Theme.Space.tight)
 
-            if isHovered && !isExpanded {
+            if isHovered && !isExpanded && !isSelecting {
                 quickActions
                     .transition(.opacity)
             }
@@ -78,8 +94,12 @@ struct ServerRowView: View {
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .onTapGesture {
-            store.selectedRowID = row.id
-            store.toggleExpanded(row.id)
+            if isSelecting {
+                store.toggleServerSelection(row.id)
+            } else {
+                store.selectedRowID = row.id
+                store.toggleExpanded(row.id)
+            }
         }
     }
 
@@ -238,11 +258,15 @@ struct ServerRowView: View {
     private var rowBackground: some View {
         RoundedRectangle(cornerRadius: Theme.Radius.row)
             .fill(fill)
+            // Selected rows are separate choices, not one card. Give consecutive
+            // highlights enough air that their rounded corners never touch.
+            .padding(.vertical, isSelecting ? Theme.Space.hairline : 0)
     }
 
     private var fill: Color {
         if isExpanded { return Theme.Colour.cardFill }
-        if isSelected { return Theme.Colour.rowSelected }
+        if isChecked { return Theme.Colour.rowSelected }
+        if isSelected && !isSelecting { return Theme.Colour.rowSelected }
         if isHovered { return Theme.Colour.rowHover }
         return .clear
     }

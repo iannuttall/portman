@@ -454,7 +454,11 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         switch event.keyCode {
         case 53: // esc — back out one level at a time
-            if store.expandedRowID != nil {
+            if store.pendingConfirmation != nil {
+                store.cancelPending()
+            } else if store.isSelectingServers {
+                store.endServerSelection()
+            } else if store.expandedRowID != nil {
                 store.expandedRowID = nil
             } else if !store.searchText.isEmpty {
                 store.searchText = ""
@@ -488,7 +492,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         case 36: // return
             guard let row = store.selectedRow ?? store.rows.first else { return false }
 
-            if command, let path = row.entry.path {
+            if store.isSelectingServers {
+                store.toggleServerSelection(row.id)
+                return true
+            } else if command, let path = row.entry.path {
                 AppLauncher.openInEditor(path: path, bundleID: Preferences.editorBundleID)
             } else {
                 store.open(row.entry)
@@ -498,6 +505,12 @@ final class PanelController: NSObject, NSWindowDelegate {
             return true
 
         case 51 where command: // ⌘⌫ — kill
+            if store.isSelectingServers {
+                guard !store.selectedServers.isEmpty else { return true }
+                store.requestKillSelectedServers()
+                return true
+            }
+
             guard let row = store.selectedRow else { return false }
             store.kill(row)
             return true

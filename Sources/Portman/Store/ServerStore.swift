@@ -92,6 +92,8 @@ final class ServerStore {
 
     var selectedRowID: String?
     var expandedRowID: String?
+    var isSelectingServers = false
+    private(set) var selectedServerIDs: Set<String> = []
 
     /// An action waiting on confirmation.
     var pendingConfirmation: PendingConfirmation?
@@ -244,6 +246,7 @@ final class ServerStore {
         isPanelOpen = false
         searchText = ""
         expandedRowID = nil
+        endServerSelection()
         scheduleTimer()
     }
 
@@ -472,6 +475,7 @@ final class ServerStore {
 
     private func clampSelection() {
         let ids = Set(rows.map(\.id))
+        selectedServerIDs.formIntersection(ids)
 
         if let selectedRowID, !ids.contains(selectedRowID) {
             self.selectedRowID = rows.first?.id
@@ -510,6 +514,40 @@ final class ServerStore {
         return rows.first { $0.id == selectedRowID }
     }
 
+    var selectedServers: [ServerRowModel] {
+        rows.filter { selectedServerIDs.contains($0.id) }
+    }
+
+    func beginServerSelection() {
+        isSelectingServers = true
+        selectedServerIDs.removeAll()
+        expandedRowID = nil
+        selectedRowID = selectedRowID ?? rows.first?.id
+    }
+
+    func endServerSelection() {
+        if isSelectingServers {
+            pendingConfirmation = nil
+        }
+        isSelectingServers = false
+        selectedServerIDs.removeAll()
+    }
+
+    func toggleServerSelection(_ id: String) {
+        guard isSelectingServers, rows.contains(where: { $0.id == id }) else { return }
+
+        selectedRowID = id
+        if selectedServerIDs.contains(id) {
+            selectedServerIDs.remove(id)
+        } else {
+            selectedServerIDs.insert(id)
+        }
+    }
+
+    func requestKillSelectedServers() {
+        requestKill(rows: selectedServers, title: "you selected")
+    }
+
     // MARK: - Actions
 
     func url(for entry: ServerEntry) -> URL {
@@ -535,6 +573,8 @@ final class ServerStore {
     }
 
     func kill(_ row: ServerRowModel) {
+        selectedServerIDs.remove(row.id)
+
         if let container = row.entry.container {
             stopContainers([container.id])
             return
@@ -556,9 +596,10 @@ final class ServerStore {
 
     func requestKill(rows targets: [ServerRowModel], title: String) {
         guard !targets.isEmpty else { return }
+        let noun = targets.count == 1 ? "server" : "servers"
 
         pendingConfirmation = PendingConfirmation(
-            message: "Kill \(targets.count) servers \(title)? This can't be undone.",
+            message: "Kill \(targets.count) \(noun) \(title)? This can't be undone.",
             confirmLabel: "Kill \(targets.count)",
             isDestructive: true
         ) { [weak self] in
@@ -577,6 +618,10 @@ final class ServerStore {
     }
 
     func kill(rows targets: [ServerRowModel]) {
+        guard !targets.isEmpty else { return }
+
+        endServerSelection()
+
         let containerIDs = targets.compactMap { $0.entry.container?.id }
         if !containerIDs.isEmpty {
             stopContainers(containerIDs)

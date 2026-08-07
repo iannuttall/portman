@@ -68,6 +68,21 @@ struct RootView: View {
                     }
                 }
 
+                if !store.rows.isEmpty {
+                    IconButton(
+                        symbol: store.isSelectingServers ? "xmark" : "checklist",
+                        help: store.isSelectingServers ? "Cancel selection" : "Select servers"
+                    ) {
+                        withAnimation(store.animation(Theme.Motion.listUpdate)) {
+                            if store.isSelectingServers {
+                                store.endServerSelection()
+                            } else {
+                                store.beginServerSelection()
+                            }
+                        }
+                    }
+                }
+
                 optionsMenu
             }
 
@@ -196,7 +211,7 @@ struct RootView: View {
                 count: section.rows.count,
                 isCollapsed: section.isCollapsible ? collapsedSections.contains(section.id) : nil,
                 toggle: section.isCollapsible ? { toggleSection(section.id) } : nil,
-                killAll: section.startsCollapsed
+                killAll: section.startsCollapsed && !store.isSelectingServers
                     ? { store.requestKill(rows: section.rows, title: title.lowercased()) }
                     : nil
             )
@@ -207,6 +222,8 @@ struct RootView: View {
                 ServerRowView(
                     row: row,
                     isSelected: store.selectedRowID == row.id,
+                    isSelecting: store.isSelectingServers,
+                    isChecked: store.selectedServerIDs.contains(row.id),
                     isExpanded: store.expandedRowID == row.id,
                     isConflicted: store.conflictPorts.contains(row.entry.port),
                     // Rows inside an Orphans or Stale section don't repeat what the
@@ -331,7 +348,17 @@ struct RootView: View {
 
             Spacer(minLength: 0)
 
-            if store.isFiltering && !store.rows.isEmpty {
+            if store.isSelectingServers {
+                if !store.selectedServers.isEmpty {
+                    ActionButton(
+                        label: "Kill \(store.selectedServers.count)",
+                        symbol: "xmark",
+                        destructive: true
+                    ) {
+                        store.requestKillSelectedServers()
+                    }
+                }
+            } else if store.isFiltering && !store.rows.isEmpty {
                 ActionButton(
                     label: "Kill all \(store.rows.count)",
                     symbol: "xmark",
@@ -366,6 +393,12 @@ struct RootView: View {
         if let message = store.actionMessage { return message }
         if store.isScanning && store.entries.isEmpty { return "Scanning…" }
 
+        if store.isSelectingServers {
+            let count = store.selectedServers.count
+            if count == 0 { return "Select servers to kill" }
+            return count == 1 ? "1 server selected" : "\(count) servers selected"
+        }
+
         let count = store.rows.count
         let noun = count == 1 ? "server" : "servers"
 
@@ -380,6 +413,12 @@ struct RootView: View {
 
     private func openSelected() {
         guard let row = store.selectedRow ?? store.rows.first else { return }
+
+        if store.isSelectingServers {
+            store.toggleServerSelection(row.id)
+            return
+        }
+
         store.open(row.entry)
         dismiss()
     }
