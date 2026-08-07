@@ -13,6 +13,33 @@
     -->
 
     <item>
+      <title>0.3.3</title>
+      <pubDate>Fri, 07 Aug 2026 14:03:53 +0000</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>0.3.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <p>You can now stop exactly the servers you choose, without filtering the list
+        or touching anything else.</p>
+        <ul>
+          <li>The new selection control replaces each status dot with a checkbox while
+          selection mode is active.</li>
+          <li>Checked rows stay aligned with the normal list and have separate
+          highlights that remain easy to scan.</li>
+          <li>The footer counts only your checked servers and asks for confirmation
+          before stopping them.</li>
+          <li>Arrow keys and Return work in selection mode, and Escape backs out without
+          killing anything.</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/iannuttall/portman/releases/download/v0.3.3/portman-0.3.3.dmg"
+        length="4487141"
+        type="application/octet-stream"
+        sparkle:edSignature="5PJ6x9BpbShcx6yYWLu41cXLgqPehULYNsmgZGRSzqbCkz+3yzGuM5tiXFKvjroI8pOEDwKBbdUHexSEk+jBCQ==" />
+    </item>
+
+    <item>
       <title>0.3.2</title>
       <pubDate>Mon, 03 Aug 2026 20:14:36 +0000</pubDate>
       <sparkle:version>6</sparkle:version>
