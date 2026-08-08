@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/portman-mark-dark.svg">
-  <img src=".github/assets/portman-mark.svg" alt="Portman" height="72">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/portman-mark-dark.svg">
+  <img src="docs/assets/portman-mark.svg" alt="Portman" height="72">
 </picture>
 
 # Portman
